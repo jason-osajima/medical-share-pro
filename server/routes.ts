@@ -3,12 +3,60 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import multer from "multer";
-import { insertDocumentSchema, insertAppointmentSchema } from "@shared/schema";
+import { insertDocumentSchema, insertAppointmentSchema, setupTotpSchema, verifyTotpSchema } from "@shared/schema";
+import { generateTotpSecret, verifyTotp, generateQrCodeUrl } from "./totp";
 
 const upload = multer({ dest: "uploads/" });
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
+
+  // 2FA Routes
+  app.post("/api/2fa/setup", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const user = await storage.getUser(req.user!.id);
+    if (!user) return res.sendStatus(404);
+
+    if (user.totpEnabled) {
+      return res.status(400).json({ message: "2FA is already enabled" });
+    }
+
+    const secret = generateTotpSecret();
+    const qrCodeUrl = await generateQrCodeUrl(secret);
+
+    await storage.updateUser(user.id, {
+      totpSecret: secret.base32,
+      totpEnabled: false,
+      totpVerified: false,
+    });
+
+    res.json({
+      secret: secret.base32,
+      qrCode: qrCodeUrl,
+    });
+  });
+
+  app.post("/api/2fa/verify", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const data = verifyTotpSchema.parse(req.body);
+    const user = await storage.getUser(req.user!.id);
+
+    if (!user || !user.totpSecret) {
+      return res.status(400).json({ message: "2FA not set up" });
+    }
+
+    if (verifyTotp(user.totpSecret, data.token)) {
+      await storage.updateUser(user.id, {
+        totpEnabled: true,
+        totpVerified: true,
+      });
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ message: "Invalid token" });
+    }
+  });
 
   // Documents
   app.post("/api/documents", upload.single("file"), async (req, res) => {
@@ -16,9 +64,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.file) return res.status(400).send("No file uploaded");
 
     try {
-      // Parse tags from JSON string back to array
       const tags = JSON.parse(req.body.tags);
-
       const docData = insertDocumentSchema.parse({
         ...req.body,
         tags,

@@ -3,6 +3,7 @@ import { Document } from "@shared/schema";
 import NavBar from "@/components/nav-bar";
 import DocumentUpload from "@/components/document-upload";
 import AppointmentForm from "@/components/appointment-form";
+import Setup2FA from "@/components/setup-2fa";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { FileIcon, FolderIcon } from "lucide-react";
@@ -15,12 +16,13 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <NavBar />
-      
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid md:grid-cols-2 gap-8">
           <div className="space-y-8">
             <DocumentUpload />
             <AppointmentForm />
+            <Setup2FA />
           </div>
 
           <div className="space-y-8">

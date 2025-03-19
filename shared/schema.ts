@@ -7,6 +7,9 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  totpSecret: text("totp_secret"),
+  totpEnabled: boolean("totp_enabled").notNull().default(false),
+  totpVerified: boolean("totp_verified").notNull().default(false),
 });
 
 // Document model
@@ -55,3 +58,12 @@ export type Document = typeof documents.$inferSelect;
 export type Appointment = typeof appointments.$inferSelect;
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
 export type InsertAppointment = z.infer<typeof insertAppointmentSchema>;
+
+// Add 2FA specific schemas
+export const setupTotpSchema = z.object({
+  token: z.string().min(6).max(6),
+});
+
+export const verifyTotpSchema = z.object({
+  token: z.string().min(6).max(6),
+});
