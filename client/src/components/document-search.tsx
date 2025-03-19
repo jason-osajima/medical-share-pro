@@ -26,7 +26,7 @@ interface DocumentSearchProps {
 export default function DocumentSearch({ onSearch, categories }: DocumentSearchProps) {
   const [filters, setFilters] = useState<SearchFilters>({
     query: "",
-    category: "",
+    category: "all",
     tags: [],
     startDate: null,
     endDate: null,
@@ -61,7 +61,10 @@ export default function DocumentSearch({ onSearch, categories }: DocumentSearchP
         <Input
           placeholder="Search by name or content..."
           value={filters.query}
-          onChange={(e) => setFilters(prev => ({ ...prev, query: e.target.value }))}
+          onChange={(e) => {
+            setFilters(prev => ({ ...prev, query: e.target.value }));
+            onSearch({ ...filters, query: e.target.value });
+          }}
         />
       </div>
 
@@ -69,13 +72,16 @@ export default function DocumentSearch({ onSearch, categories }: DocumentSearchP
         <Label>Category</Label>
         <Select
           value={filters.category}
-          onValueChange={(value) => setFilters(prev => ({ ...prev, category: value }))}
+          onValueChange={(value) => {
+            setFilters(prev => ({ ...prev, category: value }));
+            onSearch({ ...filters, category: value === "all" ? "" : value });
+          }}
         >
           <SelectTrigger>
-            <SelectValue placeholder="All categories" />
+            <SelectValue placeholder="Select category" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All categories</SelectItem>
+            <SelectItem value="all">All categories</SelectItem>
             {categories.map((category) => (
               <SelectItem key={category} value={category}>
                 {category}
@@ -106,7 +112,12 @@ export default function DocumentSearch({ onSearch, categories }: DocumentSearchP
                 {tag}
                 <button
                   type="button"
-                  onClick={() => removeTag(tag)}
+                  onClick={() => {
+                    removeTag(tag);
+                    const newTags = filters.tags.filter(t => t !== tag);
+                    setFilters(prev => ({ ...prev, tags: newTags }));
+                    onSearch({ ...filters, tags: newTags });
+                  }}
                   className="hover:text-destructive"
                 >
                   <X className="h-3 w-3" />
@@ -137,7 +148,10 @@ export default function DocumentSearch({ onSearch, categories }: DocumentSearchP
               <Calendar
                 mode="single"
                 selected={filters.startDate}
-                onSelect={(date) => setFilters(prev => ({ ...prev, startDate: date }))}
+                onSelect={(date) => {
+                  setFilters(prev => ({ ...prev, startDate: date }));
+                  onSearch({ ...filters, startDate: date });
+                }}
                 initialFocus
               />
             </PopoverContent>
@@ -163,7 +177,10 @@ export default function DocumentSearch({ onSearch, categories }: DocumentSearchP
               <Calendar
                 mode="single"
                 selected={filters.endDate}
-                onSelect={(date) => setFilters(prev => ({ ...prev, endDate: date }))}
+                onSelect={(date) => {
+                  setFilters(prev => ({ ...prev, endDate: date }));
+                  onSearch({ ...filters, endDate: date });
+                }}
                 initialFocus
               />
             </PopoverContent>
