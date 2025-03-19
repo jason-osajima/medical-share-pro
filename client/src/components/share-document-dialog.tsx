@@ -14,7 +14,6 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ShareLink } from "@shared/schema";
 import { Loader2, Share2, Copy, Link } from "lucide-react";
-import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -30,8 +29,8 @@ interface ShareDocumentDialogProps {
 export default function ShareDocumentDialog({ documentId }: ShareDocumentDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { toast } = useToast();
-  const [expiresInDays, setExpiresInDays] = useState<string>();
-  const [maxAccesses, setMaxAccesses] = useState<string>();
+  const [expiresInDays, setExpiresInDays] = useState<string>("never");
+  const [maxAccesses, setMaxAccesses] = useState<string>("unlimited");
 
   const { data: shareLinks, isLoading } = useQuery<(ShareLink & { url: string })[]>({
     queryKey: [`/api/documents/${documentId}/share`],
@@ -83,8 +82,8 @@ export default function ShareDocumentDialog({ documentId }: ShareDocumentDialogP
 
   const handleCreateLink = () => {
     createShareMutation.mutate({
-      expiresInDays: expiresInDays ? parseInt(expiresInDays) : undefined,
-      maxAccesses: maxAccesses ? parseInt(maxAccesses) : undefined,
+      expiresInDays: expiresInDays === "never" ? undefined : parseInt(expiresInDays),
+      maxAccesses: maxAccesses === "unlimited" ? undefined : parseInt(maxAccesses),
     });
   };
 
@@ -111,7 +110,7 @@ export default function ShareDocumentDialog({ documentId }: ShareDocumentDialogP
                 <SelectValue placeholder="Never" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Never</SelectItem>
+                <SelectItem value="never">Never</SelectItem>
                 <SelectItem value="1">1 day</SelectItem>
                 <SelectItem value="7">7 days</SelectItem>
                 <SelectItem value="30">30 days</SelectItem>
@@ -129,7 +128,7 @@ export default function ShareDocumentDialog({ documentId }: ShareDocumentDialogP
                 <SelectValue placeholder="Unlimited" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Unlimited</SelectItem>
+                <SelectItem value="unlimited">Unlimited</SelectItem>
                 <SelectItem value="1">1 time</SelectItem>
                 <SelectItem value="5">5 times</SelectItem>
                 <SelectItem value="10">10 times</SelectItem>
