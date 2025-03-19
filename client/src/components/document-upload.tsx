@@ -88,30 +88,42 @@ export default function DocumentUpload() {
     setOcrProgress("Initializing OCR...");
 
     try {
-      // Create a worker without any initial options
+      console.log("Starting OCR process for file:", file.name);
+      setOcrProgress("Creating worker...");
       const worker = await createWorker();
+
       setOcrProgress("Loading language data...");
-
+      console.log("Loading language data...");
       await worker.loadLanguage('eng');
+
+      setOcrProgress("Initializing engine...");
+      console.log("Initializing Tesseract...");
       await worker.initialize('eng');
-      setOcrProgress("Starting text recognition...");
 
-      // Convert file to image URL for tesseract
-      const imageUrl = URL.createObjectURL(file);
+      setOcrProgress("Converting file...");
+      console.log("Converting file to data URL...");
+      // Create a temporary URL for the file
+      const fileUrl = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
 
-      const { data: { text } } = await worker.recognize(imageUrl);
+      setOcrProgress("Processing text...");
+      console.log("Starting text recognition...");
+      const { data: { text } } = await worker.recognize(fileUrl);
+      console.log("OCR Text extracted:", text ? "Text found" : "No text found");
 
-      // Clean up
-      URL.revokeObjectURL(imageUrl);
+      setOcrProgress("Cleaning up...");
       await worker.terminate();
 
       if (!text) {
-        throw new Error("No text was extracted from the document");
+        throw new Error("No text could be extracted from the document");
       }
 
       return text;
     } catch (error) {
-      console.error('OCR Error:', error);
+      console.error('Detailed OCR Error:', error);
       throw new Error(error instanceof Error ? error.message : 'Failed to process document text');
     } finally {
       setIsProcessingOcr(false);
@@ -131,14 +143,16 @@ export default function DocumentUpload() {
 
       if (file.type === 'application/pdf' || file.type.startsWith('image/')) {
         try {
-          setOcrProgress("Starting OCR processing...");
+          console.log(`Starting OCR for file type: ${file.type}`);
           const ocrText = await processOCR(file);
+          console.log("OCR completed successfully");
           formData.append("ocrText", ocrText);
         } catch (ocrError) {
-          console.error('OCR Error:', ocrError);
+          console.error('OCR Processing Error:', ocrError);
           toast({
             title: "OCR Processing Failed",
-            description: "Document will be uploaded without text extraction",
+            description: "Document will be uploaded without text extraction. " + 
+                       (ocrError instanceof Error ? ocrError.message : "Unknown error occurred"),
             variant: "destructive",
           });
         }
@@ -146,6 +160,7 @@ export default function DocumentUpload() {
 
       uploadMutation.mutate(formData);
     } catch (error) {
+      console.error('Document Upload Error:', error);
       toast({
         title: "Upload Failed",
         description: error instanceof Error ? error.message : "Failed to upload document",
@@ -168,7 +183,13 @@ export default function DocumentUpload() {
                 className="hidden"
                 id="file-upload"
                 accept="application/pdf,image/*"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                onChange={(e) => {
+                  const selectedFile = e.target.files?.[0];
+                  if (selectedFile) {
+                    console.log(`File selected: ${selectedFile.name} (${selectedFile.type})`);
+                    setFile(selectedFile);
+                  }
+                }}
               />
               <label
                 htmlFor="file-upload"
