@@ -58,6 +58,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add this endpoint after the existing 2FA endpoints
+  app.post("/api/2fa/login-verify", async (req, res) => {
+    const { token, userId } = req.body;
+
+    const user = await storage.getUser(userId);
+    if (!user || !user.totpSecret) {
+      return res.status(400).json({ message: "Invalid user or 2FA not set up" });
+    }
+
+    if (verifyTotp(user.totpSecret, token)) {
+      req.login(user, (err) => {
+        if (err) return res.status(500).json({ message: "Login failed" });
+        res.json(user);
+      });
+    } else {
+      res.status(400).json({ message: "Invalid verification code" });
+    }
+  });
+
   // Documents
   app.post("/api/documents", upload.single("file"), async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
