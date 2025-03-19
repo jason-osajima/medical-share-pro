@@ -29,7 +29,7 @@ export default function DocumentUpload() {
   const [tags, setTags] = useState<string[]>([]);
   const [isProcessingOcr, setIsProcessingOcr] = useState(false);
   const [ocrProgress, setOcrProgress] = useState<string>("");
-  const [uploadError, setUploadError] = useState<string | null>(null); //Added state for upload errors
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const form = useForm({
     resolver: zodResolver(insertDocumentSchema),
@@ -49,7 +49,7 @@ export default function DocumentUpload() {
       });
       if (!res.ok) {
         const errorData = await res.json();
-        const errorMessage = errorData.message || "Upload failed"; //More specific error handling
+        const errorMessage = errorData.message || "Upload failed";
         throw new Error(errorMessage);
       }
       return res.json();
@@ -64,10 +64,10 @@ export default function DocumentUpload() {
       setFile(null);
       setTags([]);
       setOcrProgress("");
-      setUploadError(null); //Reset upload error
+      setUploadError(null);
     },
     onError: (error: Error) => {
-      setUploadError(error.message); //Set upload error for display
+      setUploadError(error.message);
       toast({
         title: "Upload failed",
         description: error.message,
@@ -119,8 +119,6 @@ export default function DocumentUpload() {
       console.log("Starting text recognition...");
       const { data: { text } } = await worker.recognize(fileUrl);
       console.log("OCR Text extracted:", text ? "Text found" : "No text found");
-
-      setOcrProgress("Cleaning up...");
       await worker.terminate();
 
       if (!text) {
@@ -139,11 +137,10 @@ export default function DocumentUpload() {
 
   const onSubmit = async (data: any) => {
     if (!file) return;
-    setUploadError(null); //Reset error before upload attempt
+    setUploadError(null);
 
     try {
-      //File type and size validation
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      if (file.size > 5 * 1024 * 1024) {
         throw new Error("File size exceeds the limit (5MB)");
       }
       if (!['application/pdf', 'image/jpeg', 'image/png'].includes(file.type)) {
@@ -176,7 +173,7 @@ export default function DocumentUpload() {
       uploadMutation.mutate(formData);
     } catch (error) {
       console.error('Document Upload Error:', error);
-      setUploadError(error instanceof Error ? error.message : "Failed to upload document"); //Set error for display
+      setUploadError(error instanceof Error ? error.message : "Failed to upload document");
       toast({
         title: "Upload Failed",
         description: error instanceof Error ? error.message : "Failed to upload document",
@@ -220,7 +217,7 @@ export default function DocumentUpload() {
                     {ocrProgress}
                   </div>
                 )}
-                {uploadError && ( //Display upload error
+                {uploadError && (
                   <div className="mt-2 text-sm text-red-500">
                     {uploadError}
                   </div>
