@@ -7,7 +7,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { Calendar as CalendarIcon, X } from "lucide-react";
+import { Calendar as CalendarIcon, X, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface SearchFilters {
@@ -54,6 +54,13 @@ export default function DocumentSearch({ onSearch, categories }: DocumentSearchP
     }));
   };
 
+  const handleSearch = () => {
+    onSearch({
+      ...filters,
+      category: filters.category === "all" ? "" : filters.category
+    });
+  };
+
   return (
     <div className="space-y-4 p-4 border rounded-lg bg-card">
       <div className="space-y-2">
@@ -61,10 +68,7 @@ export default function DocumentSearch({ onSearch, categories }: DocumentSearchP
         <Input
           placeholder="Search by name or content..."
           value={filters.query}
-          onChange={(e) => {
-            setFilters(prev => ({ ...prev, query: e.target.value }));
-            onSearch({ ...filters, query: e.target.value });
-          }}
+          onChange={(e) => setFilters(prev => ({ ...prev, query: e.target.value }))}
         />
       </div>
 
@@ -72,10 +76,7 @@ export default function DocumentSearch({ onSearch, categories }: DocumentSearchP
         <Label>Category</Label>
         <Select
           value={filters.category}
-          onValueChange={(value) => {
-            setFilters(prev => ({ ...prev, category: value }));
-            onSearch({ ...filters, category: value === "all" ? "" : value });
-          }}
+          onValueChange={(value) => setFilters(prev => ({ ...prev, category: value }))}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select category" />
@@ -112,12 +113,7 @@ export default function DocumentSearch({ onSearch, categories }: DocumentSearchP
                 {tag}
                 <button
                   type="button"
-                  onClick={() => {
-                    removeTag(tag);
-                    const newTags = filters.tags.filter(t => t !== tag);
-                    setFilters(prev => ({ ...prev, tags: newTags }));
-                    onSearch({ ...filters, tags: newTags });
-                  }}
+                  onClick={() => removeTag(tag)}
                   className="hover:text-destructive"
                 >
                   <X className="h-3 w-3" />
@@ -148,10 +144,7 @@ export default function DocumentSearch({ onSearch, categories }: DocumentSearchP
               <Calendar
                 mode="single"
                 selected={filters.startDate}
-                onSelect={(date) => {
-                  setFilters(prev => ({ ...prev, startDate: date }));
-                  onSearch({ ...filters, startDate: date });
-                }}
+                onSelect={(date) => setFilters(prev => ({ ...prev, startDate: date }))}
                 initialFocus
               />
             </PopoverContent>
@@ -177,10 +170,7 @@ export default function DocumentSearch({ onSearch, categories }: DocumentSearchP
               <Calendar
                 mode="single"
                 selected={filters.endDate}
-                onSelect={(date) => {
-                  setFilters(prev => ({ ...prev, endDate: date }));
-                  onSearch({ ...filters, endDate: date });
-                }}
+                onSelect={(date) => setFilters(prev => ({ ...prev, endDate: date }))}
                 initialFocus
               />
             </PopoverContent>
@@ -190,8 +180,9 @@ export default function DocumentSearch({ onSearch, categories }: DocumentSearchP
 
       <Button 
         className="w-full" 
-        onClick={() => onSearch(filters)}
+        onClick={handleSearch}
       >
+        <Search className="w-4 h-4 mr-2" />
         Search Documents
       </Button>
     </div>
