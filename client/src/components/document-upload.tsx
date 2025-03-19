@@ -30,6 +30,7 @@ export default function DocumentUpload() {
   const [isProcessingOcr, setIsProcessingOcr] = useState(false);
   const [ocrProgress, setOcrProgress] = useState<string>("");
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [ocrSuccess, setOcrSuccess] = useState<string | null>(null);
 
   const form = useForm({
     resolver: zodResolver(insertDocumentSchema),
@@ -58,13 +59,14 @@ export default function DocumentUpload() {
       queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
       toast({
         title: "Document uploaded",
-        description: "Your document has been uploaded successfully.",
+        description: ocrSuccess || "Your document has been uploaded successfully.",
       });
       form.reset();
       setFile(null);
       setTags([]);
       setOcrProgress("");
       setUploadError(null);
+      setOcrSuccess(null);
     },
     onError: (error: Error) => {
       setUploadError(error.message);
@@ -93,6 +95,7 @@ export default function DocumentUpload() {
   const processOCR = async (file: File): Promise<string> => {
     setIsProcessingOcr(true);
     setOcrProgress("Initializing OCR...");
+    setOcrSuccess(null);
 
     try {
       console.log(`Starting OCR process for file: ${file.name}`);
@@ -117,13 +120,15 @@ export default function DocumentUpload() {
       setOcrProgress("Processing text...");
       console.log("Starting text recognition...");
       const { data: { text } } = await worker.recognize(fileUrl);
-      console.log("OCR Text extracted:", text ? "Text found" : "No text found");
+      console.log("OCR Text extracted:", text ? `${text.length} characters found` : "No text found");
+
       await worker.terminate();
 
       if (!text) {
         throw new Error("No text could be extracted from the document");
       }
 
+      setOcrSuccess(`OCR completed successfully! Extracted ${text.length} characters.`);
       return text;
     } catch (error) {
       console.error('Detailed OCR Error:', error);
@@ -137,6 +142,7 @@ export default function DocumentUpload() {
   const onSubmit = async (data: any) => {
     if (!file) return;
     setUploadError(null);
+    setOcrSuccess(null);
 
     try {
       if (file.size > 5 * 1024 * 1024) {
@@ -158,6 +164,10 @@ export default function DocumentUpload() {
           const ocrText = await processOCR(file);
           console.log("OCR completed successfully");
           formData.append("ocrText", ocrText);
+          toast({
+            title: "OCR Processing Complete",
+            description: `Successfully extracted text from the image (${ocrText.length} characters)`,
+          });
         } catch (ocrError) {
           console.error('OCR Processing Error:', ocrError);
           toast({
@@ -200,6 +210,7 @@ export default function DocumentUpload() {
                   if (selectedFile) {
                     console.log(`File selected: ${selectedFile.name} (${selectedFile.type})`);
                     setFile(selectedFile);
+                    setOcrSuccess(null);
                   }
                 }}
               />
@@ -212,8 +223,14 @@ export default function DocumentUpload() {
                   {file ? file.name : "Click to upload or drag and drop"}
                 </span>
                 {ocrProgress && (
-                  <div className="mt-2 text-sm text-gray-500">
+                  <div className="mt-2 text-sm text-gray-500 flex items-center">
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     {ocrProgress}
+                  </div>
+                )}
+                {ocrSuccess && (
+                  <div className="mt-2 text-sm text-green-600">
+                    {ocrSuccess}
                   </div>
                 )}
                 {uploadError && (
