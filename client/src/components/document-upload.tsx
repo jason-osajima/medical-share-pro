@@ -68,7 +68,9 @@ export default function DocumentUpload() {
     formData.append("file", file);
     formData.append("name", data.name);
     formData.append("category", data.category);
-    formData.append("tags", JSON.stringify(data.tags.split(",")));
+    // Convert comma-separated string to JSON string of array
+    const tags = data.tags.split(",").map((tag: string) => tag.trim()).filter(Boolean);
+    formData.append("tags", JSON.stringify(tags));
 
     uploadMutation.mutate(formData);
   };

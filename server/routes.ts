@@ -15,13 +15,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     if (!req.file) return res.status(400).send("No file uploaded");
 
-    const docData = insertDocumentSchema.parse({
-      ...req.body,
-      fileUrl: req.file.path,
-    });
+    try {
+      // Parse tags from JSON string back to array
+      const tags = JSON.parse(req.body.tags);
 
-    const doc = await storage.createDocument(req.user!.id, docData);
-    res.status(201).json(doc);
+      const docData = insertDocumentSchema.parse({
+        ...req.body,
+        tags,
+        fileUrl: req.file.path,
+      });
+
+      const doc = await storage.createDocument(req.user!.id, docData);
+      res.status(201).json(doc);
+    } catch (error) {
+      console.error('Document upload error:', error);
+      res.status(400).json({ 
+        message: error instanceof Error ? error.message : 'Failed to upload document' 
+      });
+    }
   });
 
   app.get("/api/documents", async (req, res) => {
