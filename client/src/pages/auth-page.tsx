@@ -11,12 +11,15 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertUserSchema, verifyTotpSchema } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2 } from "lucide-react";
+import { queryClient } from "@/lib/queryClient";
 
 export default function AuthPage() {
   const [_, setLocation] = useLocation();
   const { user, loginMutation, registerMutation } = useAuth();
   const [showTotp, setShowTotp] = useState(false);
   const [userId, setUserId] = useState<number | null>(null);
+  const { toast } = useToast();
+  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -56,7 +59,10 @@ export default function AuthPage() {
         credentials: "include",
       });
 
-      if (!response.ok) throw new Error("Login failed");
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Login failed");
+      }
 
       const userData = await response.json();
 
@@ -68,11 +74,17 @@ export default function AuthPage() {
       }
     } catch (error) {
       console.error("Login error:", error);
+      toast({
+        title: "Login Failed",
+        description: error instanceof Error ? error.message : "Invalid credentials",
+        variant: "destructive",
+      });
     }
   };
 
   const handleTotpVerify = async (data: any) => {
     try {
+      setVerifying(true);
       const response = await fetch("/api/2fa/login-verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -80,12 +92,23 @@ export default function AuthPage() {
         credentials: "include",
       });
 
-      if (!response.ok) throw new Error("2FA verification failed");
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "2FA verification failed");
+      }
 
       const userData = await response.json();
-      loginMutation.mutate(userData);
+      setShowTotp(false);
+      queryClient.setQueryData(["/api/user"], userData);
     } catch (error) {
       console.error("2FA verification error:", error);
+      toast({
+        title: "Verification Failed",
+        description: error instanceof Error ? error.message : "Invalid verification code",
+        variant: "destructive",
+      });
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -138,9 +161,9 @@ export default function AuthPage() {
                   <Button
                     type="submit"
                     className="w-full"
-                    disabled={loginMutation.isPending}
+                    disabled={verifying}
                   >
-                    {loginMutation.isPending && (
+                    {verifying && (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     )}
                     Verify
