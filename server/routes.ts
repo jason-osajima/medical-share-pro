@@ -90,7 +90,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fileUrl: req.file.path,
       });
 
-      const doc = await storage.createDocument(req.user!.id, docData);
+      // Create document with OCR text if provided
+      const doc = await storage.createDocument(req.user!.id, {
+        ...docData,
+        ocrText: req.body.ocrText || null,
+        ocrStatus: req.body.ocrText ? 'completed' : 'pending',
+      });
+
       res.status(201).json(doc);
     } catch (error) {
       console.error('Document upload error:', error);
@@ -105,8 +111,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const docs = await storage.getUserDocuments(req.user!.id);
     res.json(docs);
   });
-
-  // Add these routes after the existing document routes
 
   // Generate share link for a document
   app.post("/api/documents/:id/share", async (req, res) => {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,8 +10,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload, X } from "lucide-react";
+import { Upload, X, FileText, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { createWorker } from 'tesseract.js';
 
 const categories = [
   "Lab Results",
@@ -26,6 +27,8 @@ export default function DocumentUpload() {
   const [file, setFile] = useState<File | null>(null);
   const [currentTag, setCurrentTag] = useState("");
   const [tags, setTags] = useState<string[]>([]);
+  const [isProcessingOcr, setIsProcessingOcr] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState<string>("");
 
   const form = useForm({
     resolver: zodResolver(insertDocumentSchema),
@@ -55,6 +58,7 @@ export default function DocumentUpload() {
       form.reset();
       setFile(null);
       setTags([]);
+      setOcrProgress("");
     },
     onError: (error: Error) => {
       toast({
@@ -79,16 +83,54 @@ export default function DocumentUpload() {
     setTags(tags.filter(tag => tag !== tagToRemove));
   };
 
-  const onSubmit = (data: any) => {
+  const processOCR = async (file: File): Promise<string> => {
+    setIsProcessingOcr(true);
+    try {
+      const worker = await createWorker({
+        logger: progress => {
+          setOcrProgress(`Processing: ${Math.round(progress.progress * 100)}%`);
+        },
+      });
+
+      await worker.loadLanguage('eng');
+      await worker.initialize('eng');
+
+      const { data: { text } } = await worker.recognize(file);
+      await worker.terminate();
+
+      return text;
+    } catch (error) {
+      console.error('OCR Error:', error);
+      throw new Error('Failed to process document text');
+    } finally {
+      setIsProcessingOcr(false);
+    }
+  };
+
+  const onSubmit = async (data: any) => {
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("name", data.name);
-    formData.append("category", data.category);
-    formData.append("tags", JSON.stringify(tags));
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("name", data.name);
+      formData.append("category", data.category);
+      formData.append("tags", JSON.stringify(tags));
 
-    uploadMutation.mutate(formData);
+      if (file.type === 'application/pdf' || file.type.startsWith('image/')) {
+        setOcrProgress("Starting OCR processing...");
+        const ocrText = await processOCR(file);
+        formData.append("ocrText", ocrText);
+      }
+
+      uploadMutation.mutate(formData);
+    } catch (error) {
+      toast({
+        title: "OCR Processing Failed",
+        description: error instanceof Error ? error.message : "Failed to process document text",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -104,6 +146,7 @@ export default function DocumentUpload() {
                 type="file"
                 className="hidden"
                 id="file-upload"
+                accept="application/pdf,image/*"
                 onChange={(e) => setFile(e.target.files?.[0] || null)}
               />
               <label
@@ -114,6 +157,11 @@ export default function DocumentUpload() {
                 <span className="mt-2 text-sm text-gray-600">
                   {file ? file.name : "Click to upload or drag and drop"}
                 </span>
+                {ocrProgress && (
+                  <div className="mt-2 text-sm text-gray-500">
+                    {ocrProgress}
+                  </div>
+                )}
               </label>
             </div>
 
@@ -187,10 +235,13 @@ export default function DocumentUpload() {
 
             <Button
               type="submit"
-              disabled={!file || uploadMutation.isPending}
+              disabled={!file || isProcessingOcr || uploadMutation.isPending}
               className="w-full"
             >
-              Upload Document
+              {(isProcessingOcr || uploadMutation.isPending) && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              {isProcessingOcr ? "Processing OCR..." : "Upload Document"}
             </Button>
           </form>
         </Form>
