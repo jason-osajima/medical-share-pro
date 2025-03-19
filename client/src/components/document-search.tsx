@@ -24,6 +24,7 @@ interface DocumentSearchProps {
 }
 
 export default function DocumentSearch({ onSearch, categories }: DocumentSearchProps) {
+  const [currentTag, setCurrentTag] = useState("");
   const [filters, setFilters] = useState<SearchFilters>({
     query: "",
     category: "all",
@@ -32,33 +33,27 @@ export default function DocumentSearch({ onSearch, categories }: DocumentSearchP
     endDate: null,
   });
 
-  const [currentTag, setCurrentTag] = useState("");
-
   const handleTagKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && currentTag.trim()) {
       e.preventDefault();
       if (!filters.tags.includes(currentTag.trim())) {
-        setFilters(prev => ({
-          ...prev,
-          tags: [...prev.tags, currentTag.trim()]
-        }));
+        const newTags = [...filters.tags, currentTag.trim()];
+        setFilters(prev => ({ ...prev, tags: newTags }));
       }
       setCurrentTag("");
     }
   };
 
   const removeTag = (tagToRemove: string) => {
-    setFilters(prev => ({
-      ...prev,
-      tags: prev.tags.filter(tag => tag !== tagToRemove)
-    }));
+    const newTags = filters.tags.filter(tag => tag !== tagToRemove);
+    setFilters(prev => ({ ...prev, tags: newTags }));
   };
 
   const handleSearch = () => {
     console.log('Search triggered with filters:', filters);
     onSearch({
       ...filters,
-      category: filters.category === "all" ? "" : filters.category
+      category: filters.category === "all" ? "" : filters.category,
     });
   };
 
@@ -66,18 +61,16 @@ export default function DocumentSearch({ onSearch, categories }: DocumentSearchP
     <div className="space-y-4 p-4 border rounded-lg bg-card">
       <div className="space-y-2">
         <Label>Search Documents</Label>
-        <div className="flex gap-2">
-          <Input
-            placeholder="Search by name or content..."
-            value={filters.query}
-            onChange={(e) => setFilters(prev => ({ ...prev, query: e.target.value }))}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                handleSearch();
-              }
-            }}
-          />
-        </div>
+        <Input
+          placeholder="Search by name or content..."
+          value={filters.query}
+          onChange={(e) => setFilters(prev => ({ ...prev, query: e.target.value }))}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              handleSearch();
+            }
+          }}
+        />
       </div>
 
       <div className="space-y-2">
@@ -102,14 +95,12 @@ export default function DocumentSearch({ onSearch, categories }: DocumentSearchP
 
       <div className="space-y-2">
         <Label>Tags</Label>
-        <div className="flex space-x-2">
-          <Input
-            placeholder="Add tags..."
-            value={currentTag}
-            onChange={(e) => setCurrentTag(e.target.value)}
-            onKeyDown={handleTagKeyDown}
-          />
-        </div>
+        <Input
+          value={currentTag}
+          onChange={(e) => setCurrentTag(e.target.value)}
+          onKeyDown={handleTagKeyDown}
+          placeholder="Type a tag and press Enter"
+        />
         {filters.tags.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2">
             {filters.tags.map((tag) => (

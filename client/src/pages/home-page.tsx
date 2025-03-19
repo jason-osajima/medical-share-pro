@@ -38,6 +38,7 @@ export default function HomePage() {
       if (searchParams.startDate) params.append("startDate", searchParams.startDate.toISOString());
       if (searchParams.endDate) params.append("endDate", searchParams.endDate.toISOString());
 
+      console.log('Fetching documents with params:', Object.fromEntries(params.entries()));
       const response = await fetch(`/api/documents?${params.toString()}`);
       if (!response.ok) throw new Error("Failed to fetch documents");
       return response.json();
