@@ -10,7 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload } from "lucide-react";
+import { Upload, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 const categories = [
   "Lab Results",
@@ -23,6 +24,8 @@ const categories = [
 export default function DocumentUpload() {
   const { toast } = useToast();
   const [file, setFile] = useState<File | null>(null);
+  const [currentTag, setCurrentTag] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
 
   const form = useForm({
     resolver: zodResolver(insertDocumentSchema),
@@ -51,6 +54,7 @@ export default function DocumentUpload() {
       });
       form.reset();
       setFile(null);
+      setTags([]);
     },
     onError: (error: Error) => {
       toast({
@@ -61,6 +65,20 @@ export default function DocumentUpload() {
     },
   });
 
+  const handleTagKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && currentTag.trim()) {
+      e.preventDefault();
+      if (!tags.includes(currentTag.trim())) {
+        setTags([...tags, currentTag.trim()]);
+      }
+      setCurrentTag("");
+    }
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    setTags(tags.filter(tag => tag !== tagToRemove));
+  };
+
   const onSubmit = (data: any) => {
     if (!file) return;
 
@@ -68,8 +86,6 @@ export default function DocumentUpload() {
     formData.append("file", file);
     formData.append("name", data.name);
     formData.append("category", data.category);
-    // Convert comma-separated string to JSON string of array
-    const tags = data.tags.split(",").map((tag: string) => tag.trim()).filter(Boolean);
     formData.append("tags", JSON.stringify(tags));
 
     uploadMutation.mutate(formData);
@@ -139,17 +155,35 @@ export default function DocumentUpload() {
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="tags"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Tags (comma-separated)</FormLabel>
-                  <Input {...field} placeholder="e.g. blood test, annual" />
-                  <FormMessage />
-                </FormItem>
+            <div className="space-y-2">
+              <FormLabel>Tags</FormLabel>
+              <Input
+                value={currentTag}
+                onChange={(e) => setCurrentTag(e.target.value)}
+                onKeyDown={handleTagKeyDown}
+                placeholder="Type a tag and press Enter"
+              />
+              {tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {tags.map((tag) => (
+                    <Badge 
+                      key={tag} 
+                      variant="secondary"
+                      className="flex items-center gap-1"
+                    >
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => removeTag(tag)}
+                        className="hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
               )}
-            />
+            </div>
 
             <Button
               type="submit"
