@@ -109,8 +109,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/documents", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    const docs = await storage.getUserDocuments(req.user!.id);
-    res.json(docs);
+
+    try {
+      const { query, category, tags, startDate, endDate } = req.query;
+      const docs = await storage.getUserDocuments(req.user!.id);
+
+      // Apply filters
+      let filteredDocs = docs;
+
+      if (query) {
+        const searchQuery = (query as string).toLowerCase();
+        filteredDocs = filteredDocs.filter(doc => 
+          doc.name.toLowerCase().includes(searchQuery) ||
+          (doc.ocrText && doc.ocrText.toLowerCase().includes(searchQuery))
+        );
+      }
+
+      if (category) {
+        filteredDocs = filteredDocs.filter(doc => 
+          doc.category === category
+        );
+      }
+
+      if (tags) {
+        const searchTags = JSON.parse(tags as string);
+        filteredDocs = filteredDocs.filter(doc =>
+          searchTags.every((tag: string) => doc.tags.includes(tag))
+        );
+      }
+
+      if (startDate) {
+        const start = new Date(startDate as string);
+        filteredDocs = filteredDocs.filter(doc =>
+          new Date(doc.uploadedAt) >= start
+        );
+      }
+
+      if (endDate) {
+        const end = new Date(endDate as string);
+        end.setHours(23, 59, 59, 999); // Include the entire end date
+        filteredDocs = filteredDocs.filter(doc =>
+          new Date(doc.uploadedAt) <= end
+        );
+      }
+
+      res.json(filteredDocs);
+    } catch (error) {
+      console.error('Document search error:', error);
+      res.status(500).json({ message: 'Failed to search documents' });
+    }
   });
 
   // Generate share link for a document

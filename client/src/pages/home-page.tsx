@@ -2,16 +2,46 @@ import { useQuery } from "@tanstack/react-query";
 import { Document } from "@shared/schema";
 import NavBar from "@/components/nav-bar";
 import DocumentUpload from "@/components/document-upload";
+import DocumentSearch from "@/components/document-search";
 import AppointmentForm from "@/components/appointment-form";
 import Setup2FA from "@/components/setup-2fa";
 import ShareDocumentDialog from "@/components/share-document-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { FileIcon, FolderIcon } from "lucide-react";
+import { FileIcon, FolderIcon, Loader2 } from "lucide-react";
+import { useState } from "react";
+
+const categories = [
+  "Lab Results",
+  "Prescriptions",
+  "Imaging",
+  "Insurance",
+  "Other",
+];
 
 export default function HomePage() {
+  const [searchParams, setSearchParams] = useState({
+    query: "",
+    category: "",
+    tags: [] as string[],
+    startDate: null as Date | null,
+    endDate: null as Date | null,
+  });
+
   const { data: documents, isLoading } = useQuery<Document[]>({
-    queryKey: ["/api/documents"],
+    queryKey: ["/api/documents", searchParams],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (searchParams.query) params.append("query", searchParams.query);
+      if (searchParams.category) params.append("category", searchParams.category);
+      if (searchParams.tags.length) params.append("tags", JSON.stringify(searchParams.tags));
+      if (searchParams.startDate) params.append("startDate", searchParams.startDate.toISOString());
+      if (searchParams.endDate) params.append("endDate", searchParams.endDate.toISOString());
+
+      const response = await fetch(`/api/documents?${params.toString()}`);
+      if (!response.ok) throw new Error("Failed to fetch documents");
+      return response.json();
+    },
   });
 
   return (
@@ -27,17 +57,24 @@ export default function HomePage() {
           </div>
 
           <div className="space-y-8">
+            <DocumentSearch
+              categories={categories}
+              onSearch={setSearchParams}
+            />
+
             <Card>
               <CardHeader>
-                <CardTitle>Recent Documents</CardTitle>
+                <CardTitle>Documents</CardTitle>
               </CardHeader>
               <CardContent>
                 <ScrollArea className="h-[400px]">
                   {isLoading ? (
-                    <div className="text-center text-gray-500">Loading...</div>
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                    </div>
                   ) : documents?.length === 0 ? (
                     <div className="text-center text-gray-500">
-                      No documents uploaded yet
+                      No documents found
                     </div>
                   ) : (
                     <div className="space-y-4">
