@@ -86,18 +86,21 @@ export default function DocumentUpload() {
   const processOCR = async (file: File): Promise<string> => {
     setIsProcessingOcr(true);
     try {
-      const worker = await createWorker({
-        logger: progress => {
-          setOcrProgress(`Processing: ${Math.round(progress.progress * 100)}%`);
-        },
-      });
+      const worker = await createWorker();
 
       await worker.loadLanguage('eng');
       await worker.initialize('eng');
 
-      const { data: { text } } = await worker.recognize(file);
-      await worker.terminate();
+      // Use a simpler progress tracking approach
+      const { data: { text }, progress } = await worker.recognize(file, {
+        logger: m => {
+          if (m.status === 'recognizing text') {
+            setOcrProgress(`Processing: ${Math.floor(m.progress * 100)}%`);
+          }
+        }
+      });
 
+      await worker.terminate();
       return text;
     } catch (error) {
       console.error('OCR Error:', error);
@@ -214,8 +217,8 @@ export default function DocumentUpload() {
               {tags.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2">
                   {tags.map((tag) => (
-                    <Badge 
-                      key={tag} 
+                    <Badge
+                      key={tag}
                       variant="secondary"
                       className="flex items-center gap-1"
                     >
