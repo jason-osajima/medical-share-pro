@@ -172,7 +172,7 @@ export default function DocumentUpload() {
           console.error('OCR Processing Error:', ocrError);
           toast({
             title: "OCR Processing Failed",
-            description: "Document will be uploaded without text extraction. " +
+            description: "Document will be uploaded without text extraction. " + 
               (ocrError instanceof Error ? ocrError.message : "Unknown error occurred"),
             variant: "destructive",
           });
