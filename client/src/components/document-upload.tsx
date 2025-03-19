@@ -85,28 +85,37 @@ export default function DocumentUpload() {
 
   const processOCR = async (file: File): Promise<string> => {
     setIsProcessingOcr(true);
+    setOcrProgress("Initializing OCR...");
+
     try {
+      // Create a worker without any initial options
       const worker = await createWorker();
+      setOcrProgress("Loading language data...");
 
       await worker.loadLanguage('eng');
       await worker.initialize('eng');
+      setOcrProgress("Starting text recognition...");
 
-      // Use a simpler progress tracking approach
-      const { data: { text }, progress } = await worker.recognize(file, {
-        logger: m => {
-          if (m.status === 'recognizing text') {
-            setOcrProgress(`Processing: ${Math.floor(m.progress * 100)}%`);
-          }
-        }
-      });
+      // Convert file to image URL for tesseract
+      const imageUrl = URL.createObjectURL(file);
 
+      const { data: { text } } = await worker.recognize(imageUrl);
+
+      // Clean up
+      URL.revokeObjectURL(imageUrl);
       await worker.terminate();
+
+      if (!text) {
+        throw new Error("No text was extracted from the document");
+      }
+
       return text;
     } catch (error) {
       console.error('OCR Error:', error);
-      throw new Error('Failed to process document text');
+      throw new Error(error instanceof Error ? error.message : 'Failed to process document text');
     } finally {
       setIsProcessingOcr(false);
+      setOcrProgress("");
     }
   };
 
@@ -121,16 +130,25 @@ export default function DocumentUpload() {
       formData.append("tags", JSON.stringify(tags));
 
       if (file.type === 'application/pdf' || file.type.startsWith('image/')) {
-        setOcrProgress("Starting OCR processing...");
-        const ocrText = await processOCR(file);
-        formData.append("ocrText", ocrText);
+        try {
+          setOcrProgress("Starting OCR processing...");
+          const ocrText = await processOCR(file);
+          formData.append("ocrText", ocrText);
+        } catch (ocrError) {
+          console.error('OCR Error:', ocrError);
+          toast({
+            title: "OCR Processing Failed",
+            description: "Document will be uploaded without text extraction",
+            variant: "destructive",
+          });
+        }
       }
 
       uploadMutation.mutate(formData);
     } catch (error) {
       toast({
-        title: "OCR Processing Failed",
-        description: error instanceof Error ? error.message : "Failed to process document text",
+        title: "Upload Failed",
+        description: error instanceof Error ? error.message : "Failed to upload document",
         variant: "destructive",
       });
     }
