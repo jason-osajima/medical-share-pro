@@ -53,6 +53,14 @@ export class DatabaseStorage implements IStorage {
     return document;
   }
 
+  async getDocument(id: number): Promise<Document | undefined> {
+    const [document] = await db
+      .select()
+      .from(documents)
+      .where(eq(documents.id, id));
+    return document;
+  }
+
   async getUserDocuments(userId: number): Promise<Document[]> {
     return db.select().from(documents).where(eq(documents.userId, userId));
   }
