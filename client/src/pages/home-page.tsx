@@ -4,6 +4,7 @@ import NavBar from "@/components/nav-bar";
 import DocumentUpload from "@/components/document-upload";
 import AppointmentForm from "@/components/appointment-form";
 import Setup2FA from "@/components/setup-2fa";
+import ShareDocumentDialog from "@/components/share-document-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { FileIcon, FolderIcon } from "lucide-react";
@@ -48,7 +49,7 @@ export default function HomePage() {
                           <div className="p-2 bg-gray-100 rounded">
                             <FileIcon className="h-5 w-5 text-gray-600" />
                           </div>
-                          <div>
+                          <div className="flex-1">
                             <h3 className="font-medium">{doc.name}</h3>
                             <div className="flex items-center gap-2 mt-1 text-sm text-gray-500">
                               <FolderIcon className="h-4 w-4" />
@@ -65,6 +66,7 @@ export default function HomePage() {
                               ))}
                             </div>
                           </div>
+                          <ShareDocumentDialog documentId={doc.id} />
                         </div>
                       ))}
                     </div>

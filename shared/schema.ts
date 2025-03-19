@@ -23,6 +23,17 @@ export const documents = pgTable("documents", {
   fileUrl: text("file_url").notNull(),
 });
 
+// Share Links model
+export const shareLinks = pgTable("share_links", {
+  id: serial("id").primaryKey(),
+  documentId: integer("document_id").notNull(),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  accessCount: integer("access_count").notNull().default(0),
+  maxAccesses: integer("max_accesses"),
+});
+
 // Appointment model
 export const appointments = pgTable("appointments", {
   id: serial("id").primaryKey(),
@@ -46,6 +57,16 @@ export const insertDocumentSchema = createInsertSchema(documents).omit({
   uploadedAt: true,
 });
 
+export const insertShareLinkSchema = createInsertSchema(shareLinks).omit({
+  id: true,
+  token: true,
+  createdAt: true,
+  accessCount: true,
+}).extend({
+  expiresInDays: z.number().min(1).max(30).optional(),
+  maxAccesses: z.number().min(1).optional(),
+});
+
 export const insertAppointmentSchema = createInsertSchema(appointments).omit({
   id: true,
   userId: true,
@@ -56,10 +77,12 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type Document = typeof documents.$inferSelect;
 export type Appointment = typeof appointments.$inferSelect;
+export type ShareLink = typeof shareLinks.$inferSelect;
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+export type InsertShareLink = z.infer<typeof insertShareLinkSchema>;
 export type InsertAppointment = z.infer<typeof insertAppointmentSchema>;
 
-// Add 2FA specific schemas
+// 2FA specific schemas
 export const setupTotpSchema = z.object({
   token: z.string().min(6).max(6),
 });

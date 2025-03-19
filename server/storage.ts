@@ -1,11 +1,12 @@
 import { IStorage } from "./types";
 import { db } from "./db";
-import { users, documents, appointments } from "@shared/schema";
+import { users, documents, appointments, shareLinks } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { User, Document, Appointment, InsertUser, InsertDocument, InsertAppointment } from "@shared/schema";
+import { User, Document, Appointment, InsertUser, InsertDocument, InsertAppointment, ShareLink, InsertShareLink } from "@shared/schema";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
+import { randomBytes } from "crypto";
 
 const PostgresSessionStore = connectPg(session);
 
@@ -88,6 +89,75 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAppointment(id: number): Promise<void> {
     await db.delete(appointments).where(eq(appointments.id, id));
+  }
+
+  async createShareLink(documentId: number, options: InsertShareLink): Promise<ShareLink> {
+    const token = randomBytes(32).toString('hex');
+
+    const [shareLink] = await db
+      .insert(shareLinks)
+      .values({
+        documentId,
+        token,
+        expiresAt: options.expiresInDays 
+          ? new Date(Date.now() + options.expiresInDays * 24 * 60 * 60 * 1000)
+          : null,
+        maxAccesses: options.maxAccesses,
+      })
+      .returning();
+
+    return shareLink;
+  }
+
+  async getShareLink(token: string): Promise<ShareLink | undefined> {
+    const [link] = await db
+      .select()
+      .from(shareLinks)
+      .where(eq(shareLinks.token, token));
+
+    return link;
+  }
+
+  async incrementShareLinkAccess(id: number): Promise<void> {
+    await db
+      .update(shareLinks)
+      .set({ accessCount: db.raw('access_count + 1') })
+      .where(eq(shareLinks.id, id));
+  }
+
+  async getSharedDocument(token: string): Promise<Document | undefined> {
+    const [result] = await db
+      .select({
+        document: documents,
+        shareLink: shareLinks,
+      })
+      .from(documents)
+      .innerJoin(shareLinks, eq(documents.id, shareLinks.documentId))
+      .where(eq(shareLinks.token, token));
+
+    if (!result) return undefined;
+
+    const { document, shareLink } = result;
+
+    // Check if link has expired
+    if (shareLink.expiresAt && new Date(shareLink.expiresAt) < new Date()) {
+      return undefined;
+    }
+
+    // Check if max accesses reached
+    if (shareLink.maxAccesses && shareLink.accessCount >= shareLink.maxAccesses) {
+      return undefined;
+    }
+
+    await this.incrementShareLinkAccess(shareLink.id);
+    return document;
+  }
+
+  async getDocumentShareLinks(documentId: number): Promise<ShareLink[]> {
+    return db
+      .select()
+      .from(shareLinks)
+      .where(eq(shareLinks.documentId, documentId));
   }
 }
 

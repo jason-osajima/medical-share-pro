@@ -106,6 +106,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(docs);
   });
 
+  // Add these routes after the existing document routes
+
+  // Generate share link for a document
+  app.post("/api/documents/:id/share", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const documentId = parseInt(req.params.id);
+      const doc = await storage.getDocument(documentId);
+
+      if (!doc || doc.userId !== req.user!.id) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const shareLink = await storage.createShareLink(documentId, req.body);
+      res.status(201).json({
+        ...shareLink,
+        url: `${req.protocol}://${req.get('host')}/shared/${shareLink.token}`,
+      });
+    } catch (error) {
+      console.error('Share link creation error:', error);
+      res.status(400).json({ 
+        message: error instanceof Error ? error.message : 'Failed to create share link' 
+      });
+    }
+  });
+
+  // Get all share links for a document
+  app.get("/api/documents/:id/share", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const documentId = parseInt(req.params.id);
+      const doc = await storage.getDocument(documentId);
+
+      if (!doc || doc.userId !== req.user!.id) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const links = await storage.getDocumentShareLinks(documentId);
+      const shareLinks = links.map(link => ({
+        ...link,
+        url: `${req.protocol}://${req.get('host')}/shared/${link.token}`,
+      }));
+
+      res.json(shareLinks);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch share links" });
+    }
+  });
+
+  // Access shared document
+  app.get("/api/shared/:token", async (req, res) => {
+    try {
+      const doc = await storage.getSharedDocument(req.params.token);
+      if (!doc) {
+        return res.status(404).json({ message: "Document not found or link expired" });
+      }
+      res.json(doc);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch shared document" });
+    }
+  });
+
+
   // Appointments
   app.post("/api/appointments", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
