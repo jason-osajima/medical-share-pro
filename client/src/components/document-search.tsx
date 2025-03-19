@@ -55,6 +55,7 @@ export default function DocumentSearch({ onSearch, categories }: DocumentSearchP
   };
 
   const handleSearch = () => {
+    console.log('Search triggered with filters:', filters);
     onSearch({
       ...filters,
       category: filters.category === "all" ? "" : filters.category
@@ -65,11 +66,18 @@ export default function DocumentSearch({ onSearch, categories }: DocumentSearchP
     <div className="space-y-4 p-4 border rounded-lg bg-card">
       <div className="space-y-2">
         <Label>Search Documents</Label>
-        <Input
-          placeholder="Search by name or content..."
-          value={filters.query}
-          onChange={(e) => setFilters(prev => ({ ...prev, query: e.target.value }))}
-        />
+        <div className="flex gap-2">
+          <Input
+            placeholder="Search by name or content..."
+            value={filters.query}
+            onChange={(e) => setFilters(prev => ({ ...prev, query: e.target.value }))}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleSearch();
+              }
+            }}
+          />
+        </div>
       </div>
 
       <div className="space-y-2">

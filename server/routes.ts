@@ -112,6 +112,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     try {
       const { query, category, tags, startDate, endDate } = req.query;
+      console.log('Document search request:', { query, category, tags, startDate, endDate });
+
       const docs = await storage.getUserDocuments(req.user!.id);
 
       // Apply filters
@@ -119,6 +121,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (query) {
         const searchQuery = (query as string).toLowerCase();
+        console.log('Applying text search:', searchQuery);
         filteredDocs = filteredDocs.filter(doc => 
           doc.name.toLowerCase().includes(searchQuery) ||
           (doc.ocrText && doc.ocrText.toLowerCase().includes(searchQuery))
@@ -126,6 +129,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (category) {
+        console.log('Applying category filter:', category);
         filteredDocs = filteredDocs.filter(doc => 
           doc.category === category
         );
@@ -133,6 +137,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (tags) {
         const searchTags = JSON.parse(tags as string);
+        console.log('Applying tag filters:', searchTags);
         filteredDocs = filteredDocs.filter(doc =>
           searchTags.every((tag: string) => doc.tags.includes(tag))
         );
@@ -140,6 +145,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (startDate) {
         const start = new Date(startDate as string);
+        console.log('Applying start date filter:', start);
         filteredDocs = filteredDocs.filter(doc =>
           new Date(doc.uploadedAt) >= start
         );
@@ -148,11 +154,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (endDate) {
         const end = new Date(endDate as string);
         end.setHours(23, 59, 59, 999); // Include the entire end date
+        console.log('Applying end date filter:', end);
         filteredDocs = filteredDocs.filter(doc =>
           new Date(doc.uploadedAt) <= end
         );
       }
 
+      console.log(`Found ${filteredDocs.length} documents after applying filters`);
       res.json(filteredDocs);
     } catch (error) {
       console.error('Document search error:', error);
