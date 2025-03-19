@@ -29,6 +29,7 @@ export default function DocumentUpload() {
   const [tags, setTags] = useState<string[]>([]);
   const [isProcessingOcr, setIsProcessingOcr] = useState(false);
   const [ocrProgress, setOcrProgress] = useState<string>("");
+  const [uploadError, setUploadError] = useState<string | null>(null); //Added state for upload errors
 
   const form = useForm({
     resolver: zodResolver(insertDocumentSchema),
@@ -46,7 +47,11 @@ export default function DocumentUpload() {
         method: "POST",
         body: formData,
       });
-      if (!res.ok) throw new Error("Upload failed");
+      if (!res.ok) {
+        const errorData = await res.json();
+        const errorMessage = errorData.message || "Upload failed"; //More specific error handling
+        throw new Error(errorMessage);
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -59,8 +64,10 @@ export default function DocumentUpload() {
       setFile(null);
       setTags([]);
       setOcrProgress("");
+      setUploadError(null); //Reset upload error
     },
     onError: (error: Error) => {
+      setUploadError(error.message); //Set upload error for display
       toast({
         title: "Upload failed",
         description: error.message,
@@ -88,7 +95,7 @@ export default function DocumentUpload() {
     setOcrProgress("Initializing OCR...");
 
     try {
-      console.log("Starting OCR process for file:", file.name);
+      console.log(`Starting OCR process for file: ${file.name}`);
       setOcrProgress("Creating worker...");
       const worker = await createWorker();
 
@@ -102,7 +109,6 @@ export default function DocumentUpload() {
 
       setOcrProgress("Converting file...");
       console.log("Converting file to data URL...");
-      // Create a temporary URL for the file
       const fileUrl = await new Promise<string>((resolve) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
@@ -133,8 +139,17 @@ export default function DocumentUpload() {
 
   const onSubmit = async (data: any) => {
     if (!file) return;
+    setUploadError(null); //Reset error before upload attempt
 
     try {
+      //File type and size validation
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        throw new Error("File size exceeds the limit (5MB)");
+      }
+      if (!['application/pdf', 'image/jpeg', 'image/png'].includes(file.type)) {
+        throw new Error("Invalid file type. Only PDF, JPEG, and PNG are supported.");
+      }
+
       const formData = new FormData();
       formData.append("file", file);
       formData.append("name", data.name);
@@ -151,8 +166,8 @@ export default function DocumentUpload() {
           console.error('OCR Processing Error:', ocrError);
           toast({
             title: "OCR Processing Failed",
-            description: "Document will be uploaded without text extraction. " + 
-                       (ocrError instanceof Error ? ocrError.message : "Unknown error occurred"),
+            description: "Document will be uploaded without text extraction. " +
+              (ocrError instanceof Error ? ocrError.message : "Unknown error occurred"),
             variant: "destructive",
           });
         }
@@ -161,6 +176,7 @@ export default function DocumentUpload() {
       uploadMutation.mutate(formData);
     } catch (error) {
       console.error('Document Upload Error:', error);
+      setUploadError(error instanceof Error ? error.message : "Failed to upload document"); //Set error for display
       toast({
         title: "Upload Failed",
         description: error instanceof Error ? error.message : "Failed to upload document",
@@ -202,6 +218,11 @@ export default function DocumentUpload() {
                 {ocrProgress && (
                   <div className="mt-2 text-sm text-gray-500">
                     {ocrProgress}
+                  </div>
+                )}
+                {uploadError && ( //Display upload error
+                  <div className="mt-2 text-sm text-red-500">
+                    {uploadError}
                   </div>
                 )}
               </label>

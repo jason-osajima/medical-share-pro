@@ -77,7 +77,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Documents
+  // Document upload route with improved OCR handling
   app.post("/api/documents", upload.single("file"), async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     if (!req.file) return res.status(400).send("No file uploaded");
@@ -95,6 +95,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...docData,
         ocrText: req.body.ocrText || null,
         ocrStatus: req.body.ocrText ? 'completed' : 'pending',
+        ocrError: null, // Reset any previous error
       });
 
       res.status(201).json(doc);
