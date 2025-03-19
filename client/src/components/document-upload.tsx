@@ -52,7 +52,7 @@ export default function DocumentUpload() {
         const errorMessage = errorData.message || "Upload failed";
         throw new Error(errorMessage);
       }
-      return res.json();
+      return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
@@ -96,7 +96,6 @@ export default function DocumentUpload() {
 
     try {
       console.log(`Starting OCR process for file: ${file.name}`);
-      setOcrProgress("Creating worker...");
       const worker = await createWorker();
 
       setOcrProgress("Loading language data...");
@@ -153,7 +152,7 @@ export default function DocumentUpload() {
       formData.append("category", data.category);
       formData.append("tags", JSON.stringify(tags));
 
-      if (file.type === 'application/pdf' || file.type.startsWith('image/')) {
+      if (file.type.startsWith('image/')) {
         try {
           console.log(`Starting OCR for file type: ${file.type}`);
           const ocrText = await processOCR(file);
