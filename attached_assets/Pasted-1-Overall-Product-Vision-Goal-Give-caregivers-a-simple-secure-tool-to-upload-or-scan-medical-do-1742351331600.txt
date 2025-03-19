@@ -1,0 +1,218 @@
+1. Overall Product Vision
+Goal: Give caregivers a simple, secure tool to upload (or scan) medical documents, tag them by category, attach them to specific appointments or events, and retrieve everything effortlessly through search or timeline view.
+
+Document Upload & Organization
+
+Quick scanning from a mobile camera or file upload.
+Categorization & tagging (e.g., “Lab Results,” “Medication List,” custom tags).
+Intuitive retrieval with a global search bar.
+Appointment Timeline
+
+Allows caregivers to log upcoming or past appointments.
+Option to attach documents to each appointment.
+Short summary of what happened at each visit.
+Basic Sharing (Optional for MVP)
+
+Generate a secure link or email invite for selected documents or a specific appointment.
+Permissions can be revoked at any time.
+Mobile-Responsive UI
+
+Prioritize phone usage: large fonts, big touch targets, minimal steps.
+Desktop web version uses the same design principles for clarity and consistency.
+Security & Privacy
+
+Data encrypted in transit and at rest.
+Clear, user-friendly language about privacy.
+Option for two-factor authentication (2FA).
+2. Core User Flow
+2.1 Onboarding & Account Setup
+Sign-up/Login
+
+Simple form: email + password (or social login).
+Brief email confirmation for basic security.
+Welcome Slides (Optional)
+
+Very short tutorial highlighting the main benefits:
+“Upload & Tag Documents”
+“Track Appointments on a Timeline”
+“Find Everything Instantly”
+A “Skip” button for experienced users.
+2.2 Dashboard / Home
+Top Navigation
+
+Logo on the left,
+Search icon or bar in the middle,
+Settings/Account icon on the right.
+Main Content
+
+Quick Actions: A prominent “+” button with two core options:
+“Upload Document” (or “Scan Document” if on mobile)
+“Add Appointment”
+Categories or Folders (Lab Results, Doctor Notes, Medication Lists, etc.) in a simple grid or list.
+Recent Uploads or “Recently Added” area to help caregivers find newly added docs.
+Timeline Access
+
+A button, e.g., “View Timeline” or a tab labeled “Timeline,” leading to a chronological view of healthcare events.
+2.3 Upload Document & Categorization
+Upload / Scan
+
+Mobile: Camera interface with an auto-scan/auto-crop if possible.
+Web: Drag-and-drop or file picker.
+Show an upload progress indicator.
+Categorize & Tag
+
+After uploading, user sees a form:
+Category: A dropdown with defaults plus “Other.”
+Tag(s): Freely enter or pick from suggestions (“Blood Test,” “Insurance,” etc.).
+Attach to an Appointment? (optional). If user selects an existing appointment, the doc links to that timeline event.
+Press “Save” or “Done” to confirm.
+2.4 Add Appointment (Event)
+Create Appointment
+
+Form Fields:
+Title (e.g., “Cardiology Checkup”)
+Date & Time (e.g., 2025-07-10, 2:00 PM)
+Provider or Location (optional)
+Notes / Summary (user can write a brief recap after the appointment)
+Attach Existing Documents: multi-select from user’s doc library if relevant.
+Save to create the event on the timeline.
+Appointment Details View
+
+Shows date/time, summary, linked documents.
+Buttons: “Edit,” “Attach Document,” or “Delete.”
+2.5 Timeline View
+Chronological Appointment List
+
+Most recent at the top (or bottom, developer’s choice).
+Each “Appointment Card” shows:
+Date/Time
+Title (e.g., “Orthopedic Consultation”)
+Short summary snippet
+Attached Documents (thumbnails or file icons).
+Tap/Click to Expand
+
+Full details: any longer notes, full doc list, option to add or remove documents.
+Add Appointment
+
+A button on the timeline screen that opens the “Add Appointment” form (see above).
+2.6 Search & Retrieval
+Search Bar
+
+Sits at the top of every major screen.
+Search by file name, category, tag, or appointment title.
+Simple keyword matching for MVP.
+Filter Panel (Optional)
+
+If more advanced, include date range filtering, category selection, or appointment name filtering.
+Search Results
+
+Displays both documents and relevant appointments.
+Tapping an appointment result leads to the timeline entry; tapping a document opens its viewer.
+2.7 Document Sharing (Optional in MVP)
+Select Documents
+
+Checkboxes or multi-select in the document library.
+Alternatively, share from the Appointment Details screen to share all docs related to that event.
+Generate Link / Invite
+
+Users enter an email or create a secure link that expires after X days.
+Option to revoke or extend access in “Settings.”
+2.8 Settings & Profile
+Account Info
+
+Change email, password, or subscription plan (if using a freemium model).
+Security
+
+Enable 2FA.
+View privacy statement or encryption details.
+Manage Sharing
+
+List of all active share links, with a “Revoke Access” button.
+3. Wireframe Summaries (In Words)
+Below are succinct textual descriptions of key screens. (A solo dev or small team can mock these up in Figma or any wireframing tool.)
+
+Sign-Up / Login
+
+Clean page, large text fields, “Create Account” button, “Login with Email” or “Google Login.”
+Dashboard
+
+Header with search.
+Main content: Category icons (4–5 default) + a “Recent Documents” list.
+Floating “+” button bottom-right for new doc or new appointment.
+Upload / Scan
+
+Mobile: camera preview with “Capture” or “Retake.”
+Web: Drag-and-drop zone or “Browse your files.”
+Minimal friction to finalize.
+Categorize & Tag
+
+Simple form: category dropdown, tag field, optional attach-to-appointment dropdown.
+Appointment Details
+
+Title, date/time, summary notes text box, doc attachments (icons or small thumbnails).
+Action buttons: “Edit,” “Attach Document,” “Delete.”
+Timeline
+
+A vertical feed of appointment cards. Each card: date/time, title, short summary, doc icons.
+Clicking expands to full details.
+Search Results
+
+Combined list of matching docs and appointments.
+Filter or advanced options if time permits.
+Settings
+
+Profile & security.
+Possibly share link management.
+4. Design & Interaction Guidelines
+Simplicity for Caregivers
+
+Large font sizes (16–18px+).
+High-contrast text and icons.
+Minimal number of steps in flows.
+Calming, Approachable Colors
+
+Light backgrounds, moderate accent color (e.g., muted blues/greens).
+Avoid clinical white-on-white or overly sterile designs. A bit of warmth is welcome.
+Mobile-Responsive Layout
+
+On phones, single-column flow, big “+” button for scanning and adding appointments.
+On desktop, more space for a grid-based view of categories and timeline.
+Security Messaging
+
+Basic reassurance about encryption and data privacy.
+Highlight that your app does not connect to official medical systems.
+Clear disclaimers that this is user-managed data storage, not a HIPAA “patient portal.”
+5. Technical Feasibility & Timeline
+Stack Options
+
+Low-Code: Tools like Bubble or Adalo for rapid prototyping.
+Custom: A React (or Vue) front end with Node.js/Express or Django backend.
+Database: Simple relational schema (appointments, documents, tags, user accounts).
+Storage: Secure cloud (AWS S3 or similar) with encryption at rest.
+MVP Delivery (~2–3 months)
+
+Month 1
+Basic user auth, doc upload, category/tag, minimal UI for doc viewing.
+Initial appointment entity (title/date/summary).
+Basic timeline listing.
+Month 2
+Polishing flows: attach docs to appointments, robust search.
+Sharing or partial OCR if feasible.
+Finalize mobile responsiveness & security layer.
+Month 3
+Beta launch, gather feedback from test caregivers.
+Minor bug fixes & usability improvements.
+Evaluate adding optional advanced features (OCR, family access, subscription model).
+6. Why This MVP Solves Caregiver Pain Points
+Document Chaos
+Caregivers can upload or scan quickly, tag docs, and later find them via categories, tags, or appointments.
+Appointment Tracking
+Timeline ensures each visit’s outcome is captured, with relevant docs attached in a chronological log.
+Low Tech Barrier
+Large, clear UI; no forced integration with hospital systems.
+Straightforward steps keep it accessible for older or less tech-savvy users.
+Quick Retrieval
+Global search bar, timeline, and category filters make it simple to find the right record.
+Security & Privacy
+Caregiver-managed data. No strict HIPAA overhead since it’s an organizing tool, but still uses encryption.
+Optional sharing means the user decides exactly what’s shared and for how long.
