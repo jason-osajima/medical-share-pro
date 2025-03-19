@@ -99,8 +99,12 @@ export default function DocumentUpload() {
 
     try {
       console.log(`Starting OCR process for file: ${file.name}`);
-      const worker = await createWorker();
-
+      const worker = await createWorker({
+        logger: (m) => {
+          setOcrProgress(m.status);
+          console.log(m.status);
+        }
+      });
       setOcrProgress("Loading language data...");
       console.log("Loading language data...");
       await worker.loadLanguage('eng');
@@ -161,6 +165,12 @@ export default function DocumentUpload() {
       if (file.type.startsWith('image/')) {
         try {
           console.log(`Starting OCR for file type: ${file.type}`);
+          const worker = await createWorker({
+            logger: (m) => {
+              setOcrProgress(m.status);
+              console.log(m.status);
+            }
+          });
           const ocrText = await processOCR(file);
           console.log("OCR completed successfully");
           formData.append("ocrText", ocrText);
@@ -168,6 +178,7 @@ export default function DocumentUpload() {
             title: "OCR Processing Complete",
             description: `Successfully extracted text from the image (${ocrText.length} characters)`,
           });
+          await worker.terminate();
         } catch (ocrError) {
           console.error('OCR Processing Error:', ocrError);
           toast({
