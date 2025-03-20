@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload, X, FileText, Loader2 } from "lucide-react";
+import { Upload, X, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { createWorker } from 'tesseract.js';
 
@@ -42,6 +42,71 @@ export default function DocumentUpload() {
     },
   });
 
+  const handleTagKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && currentTag.trim()) {
+      e.preventDefault();
+      if (!tags.includes(currentTag.trim())) {
+        setTags([...tags, currentTag.trim()]);
+      }
+      setCurrentTag("");
+    }
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    setTags(tags.filter(tag => tag !== tagToRemove));
+  };
+
+  const processOCR = async (file: File): Promise<string> => {
+    if (!file.type.startsWith('image/')) {
+      throw new Error('OCR is only supported for image files');
+    }
+
+    setIsProcessingOcr(true);
+    setOcrProgress("Initializing OCR...");
+    setOcrSuccess(null);
+
+    try {
+      const worker = await createWorker();
+      console.log("OCR worker created");
+
+      setOcrProgress("Loading language data...");
+      await worker.loadLanguage('eng');
+      console.log("Language loaded");
+
+      setOcrProgress("Initializing engine...");
+      await worker.initialize('eng');
+      console.log("Engine initialized");
+
+      // Convert file to base64
+      const base64Data = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
+
+      setOcrProgress("Processing text...");
+      console.log("Starting text recognition");
+      const { data: { text } } = await worker.recognize(base64Data);
+      console.log("Text recognition completed, length:", text?.length);
+
+      if (!text) {
+        throw new Error("No text could be extracted from the document");
+      }
+
+      await worker.terminate();
+      console.log("Worker terminated");
+
+      setOcrSuccess(`OCR completed successfully! Extracted ${text.length} characters.`);
+      return text;
+    } catch (error) {
+      console.error('OCR Processing Error:', error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to process document text');
+    } finally {
+      setIsProcessingOcr(false);
+      setOcrProgress("");
+    }
+  };
+
   const uploadMutation = useMutation({
     mutationFn: async (formData: FormData) => {
       const res = await fetch("/api/documents", {
@@ -52,7 +117,7 @@ export default function DocumentUpload() {
         const errorData = await res.json();
         throw new Error(errorData.message || "Upload failed");
       }
-      return await res.json();
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
@@ -77,59 +142,6 @@ export default function DocumentUpload() {
     },
   });
 
-  const handleTagKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && currentTag.trim()) {
-      e.preventDefault();
-      if (!tags.includes(currentTag.trim())) {
-        setTags([...tags, currentTag.trim()]);
-      }
-      setCurrentTag("");
-    }
-  };
-
-  const removeTag = (tagToRemove: string) => {
-    setTags(tags.filter(tag => tag !== tagToRemove));
-  };
-
-  const processOCR = async (file: File): Promise<string> => {
-    setIsProcessingOcr(true);
-    setOcrProgress("Initializing OCR...");
-    setOcrSuccess(null);
-
-    try {
-      const worker = await createWorker({
-        logger: m => {
-          setOcrProgress(m.status);
-          console.log(m.status);
-        }
-      });
-
-      setOcrProgress("Loading language data...");
-      await worker.loadLanguage('eng');
-
-      setOcrProgress("Initializing engine...");
-      await worker.initialize('eng');
-
-      setOcrProgress("Processing text...");
-      const { data: { text } } = await worker.recognize(file);
-
-      await worker.terminate();
-
-      if (!text) {
-        throw new Error("No text could be extracted from the document");
-      }
-
-      setOcrSuccess(`OCR completed successfully! Extracted ${text.length} characters.`);
-      return text;
-    } catch (error) {
-      console.error('OCR Error:', error);
-      throw new Error(error instanceof Error ? error.message : 'Failed to process document text');
-    } finally {
-      setIsProcessingOcr(false);
-      setOcrProgress("");
-    }
-  };
-
   const onSubmit = async (data: any) => {
     if (!file) return;
     setUploadError(null);
@@ -150,10 +162,7 @@ export default function DocumentUpload() {
         try {
           const ocrText = await processOCR(file);
           formData.append("ocrText", ocrText);
-          toast({
-            title: "OCR Processing Complete",
-            description: `Successfully extracted text from the image (${ocrText.length} characters)`,
-          });
+          console.log("OCR text appended to form data, length:", ocrText.length);
         } catch (ocrError) {
           console.error('OCR Processing Error:', ocrError);
           toast({
@@ -190,7 +199,7 @@ export default function DocumentUpload() {
                 type="file"
                 className="hidden"
                 id="file-upload"
-                accept="application/pdf,image/*"
+                accept="image/*"
                 onChange={(e) => {
                   const selectedFile = e.target.files?.[0];
                   if (selectedFile) {
