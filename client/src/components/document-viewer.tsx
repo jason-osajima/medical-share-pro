@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Document } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
 import { FileText, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -14,7 +15,6 @@ interface DocumentViewerProps {
 
 export default function DocumentViewer({ document }: DocumentViewerProps) {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [isExpanded, setIsExpanded] = useState(false);
 
   const summarizeMutation = useMutation({
@@ -68,55 +68,52 @@ export default function DocumentViewer({ document }: DocumentViewerProps) {
         )}
       </div>
 
-      <div
-        className={cn(
-          "space-y-4 overflow-hidden transition-all duration-200",
-          isExpanded ? "h-auto" : "h-0"
-        )}
-      >
-        {document.summary && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Summary</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[200px]">
-                <div className="prose">
-                  {document.summary}
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        )}
+      {isExpanded && (
+        <div className="space-y-4">
+          {document.summary && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Summary</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[200px]">
+                  <div className="prose max-w-none">
+                    {document.summary}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          )}
 
-        {document.ocrText && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Document Content</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[300px]">
-                <div className="prose whitespace-pre-wrap">
-                  {document.ocrText}
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        )}
+          {document.ocrText && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Document Content</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[300px]">
+                  <div className="prose max-w-none whitespace-pre-wrap">
+                    {document.ocrText}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          )}
 
-        {document.summaryStatus === "processing" && (
-          <div className="flex items-center justify-center py-4">
-            <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-            <span className="ml-2 text-gray-600">Generating summary...</span>
-          </div>
-        )}
+          {document.summaryStatus === "processing" && (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+              <span className="ml-2 text-gray-600">Generating summary...</span>
+            </div>
+          )}
 
-        {document.summaryError && (
-          <div className="text-red-500">
-            Error generating summary: {document.summaryError}
-          </div>
-        )}
-      </div>
+          {document.summaryError && (
+            <div className="text-red-500">
+              Error generating summary: {document.summaryError}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
