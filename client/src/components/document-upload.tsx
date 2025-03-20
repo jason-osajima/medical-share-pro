@@ -199,7 +199,7 @@ export default function DocumentUpload() {
                 type="file"
                 className="hidden"
                 id="file-upload"
-                accept="image/*"
+                accept="application/pdf,image/*"
                 onChange={(e) => {
                   const selectedFile = e.target.files?.[0];
                   if (selectedFile) {
@@ -216,6 +216,9 @@ export default function DocumentUpload() {
                 <Upload className="h-8 w-8 text-gray-400" />
                 <span className="mt-2 text-sm text-gray-600">
                   {file ? file.name : "Click to upload or drag and drop"}
+                </span>
+                <span className="mt-1 text-xs text-gray-500">
+                  Supports PDF and image files (up to 5MB)
                 </span>
                 {ocrProgress && (
                   <div className="mt-2 text-sm text-gray-500 flex items-center">
