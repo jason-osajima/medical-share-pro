@@ -5,8 +5,13 @@ import { setupAuth } from "./auth";
 import multer from "multer";
 import { insertDocumentSchema, insertAppointmentSchema, setupTotpSchema, verifyTotpSchema } from "@shared/schema";
 import { generateTotpSecret, verifyTotp, generateQrCodeUrl } from "./totp";
+import OpenAI from "openai";
 
 const upload = multer({ dest: "uploads/" });
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -271,6 +276,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     await storage.deleteAppointment(appt.id);
     res.sendStatus(204);
+  });
+
+  // Add this inside registerRoutes function, after the existing document routes
+  app.post("/api/documents/:id/summarize", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const documentId = parseInt(req.params.id);
+      const document = await storage.getDocument(documentId);
+
+      if (!document || document.userId !== req.user!.id) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      if (!document.ocrText) {
+        return res.status(400).json({ message: "No OCR text available for summarization" });
+      }
+
+      await storage.updateDocument(documentId, {
+        summaryStatus: "processing",
+        summaryError: null,
+      });
+
+      const prompt = `Please summarize the following medical document text, focusing on key medical information, dates, and important details:\n\n${document.ocrText}`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "system",
+            content: "You are a medical document summarizer. Focus on extracting key medical information, dates, diagnoses, medications, and important details from medical documents."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 500
+      });
+
+      const summary = completion.choices[0]?.message?.content;
+
+      if (!summary) {
+        throw new Error("Failed to generate summary");
+      }
+
+      const updated = await storage.updateDocument(documentId, {
+        summary,
+        summaryStatus: "completed",
+        summaryError: null,
+      });
+
+      res.json(updated);
+    } catch (error) {
+      console.error('Document summarization error:', error);
+
+      await storage.updateDocument(parseInt(req.params.id), {
+        summaryStatus: "error",
+        summaryError: error instanceof Error ? error.message : "Unknown error occurred",
+      });
+
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to summarize document" 
+      });
+    }
   });
 
   const httpServer = createServer(app);

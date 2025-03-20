@@ -12,7 +12,7 @@ export const users = pgTable("users", {
   totpVerified: boolean("totp_verified").notNull().default(false),
 });
 
-// Document model updated with OCR fields
+// Document model updated with OCR fields and summary
 export const documents = pgTable("documents", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
@@ -24,6 +24,9 @@ export const documents = pgTable("documents", {
   ocrText: text("ocr_text"),
   ocrStatus: text("ocr_status").default("pending"),
   ocrError: text("ocr_error"),
+  summary: text("summary"),
+  summaryStatus: text("summary_status").default("pending"),
+  summaryError: text("summary_error"),
 });
 
 // Share Links model
@@ -62,6 +65,9 @@ export const insertDocumentSchema = createInsertSchema(documents).omit({
   ocrText: true,
   ocrStatus: true,
   ocrError: true,
+  summary: true,
+  summaryStatus: true,
+  summaryError: true,
 });
 
 export const insertShareLinkSchema = createInsertSchema(shareLinks).omit({

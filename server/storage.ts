@@ -10,6 +10,30 @@ import { randomBytes } from "crypto";
 
 const PostgresSessionStore = connectPg(session);
 
+// Add updateDocument method to IStorage interface
+export interface IStorage {
+  sessionStore: session.SessionStore;
+  getUser(id: number): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  createUser(insertUser: InsertUser): Promise<User>;
+  updateUser(id: number, updateData: Partial<User>): Promise<User>;
+  createDocument(userId: number, doc: InsertDocument): Promise<Document>;
+  getDocument(id: number): Promise<Document | undefined>;
+  getUserDocuments(userId: number): Promise<Document[]>;
+  createAppointment(userId: number, appt: InsertAppointment): Promise<Appointment>;
+  getUserAppointments(userId: number): Promise<Appointment[]>;
+  getAppointment(id: number): Promise<Appointment | undefined>;
+  updateAppointment(id: number, appt: Partial<InsertAppointment>): Promise<Appointment>;
+  deleteAppointment(id: number): Promise<void>;
+  createShareLink(documentId: number, options: InsertShareLink): Promise<ShareLink>;
+  getShareLink(token: string): Promise<ShareLink | undefined>;
+  incrementShareLinkAccess(id: number): Promise<void>;
+  getSharedDocument(token: string): Promise<Document | undefined>;
+  getDocumentShareLinks(documentId: number): Promise<ShareLink[]>;
+  updateDocument(id: number, updateData: Partial<Document>): Promise<Document>;
+}
+
+// Add implementation in DatabaseStorage class
 export class DatabaseStorage implements IStorage {
   sessionStore: session.SessionStore;
 
@@ -107,7 +131,7 @@ export class DatabaseStorage implements IStorage {
       .values({
         documentId,
         token,
-        expiresAt: options.expiresInDays 
+        expiresAt: options.expiresInDays
           ? new Date(Date.now() + options.expiresInDays * 24 * 60 * 60 * 1000)
           : null,
         maxAccesses: options.maxAccesses,
@@ -166,6 +190,16 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(shareLinks)
       .where(eq(shareLinks.documentId, documentId));
+  }
+
+  async updateDocument(id: number, updateData: Partial<Document>): Promise<Document> {
+    const [document] = await db
+      .update(documents)
+      .set(updateData)
+      .where(eq(documents.id, id))
+      .returning();
+    if (!document) throw new Error("Document not found");
+    return document;
   }
 }
 

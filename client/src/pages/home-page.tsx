@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { FileIcon, FolderIcon, Loader2 } from "lucide-react";
 import { useState } from "react";
+import DocumentViewer from "@/components/document-viewer";
 
 const categories = [
   "Lab Results",
@@ -89,29 +90,32 @@ export default function HomePage() {
                       {documents?.map((doc) => (
                         <div
                           key={doc.id}
-                          className="flex items-start gap-3 p-3 rounded-lg border"
+                          className="flex flex-col gap-3 p-3 rounded-lg border"
                         >
-                          <div className="p-2 bg-gray-100 rounded">
-                            <FileIcon className="h-5 w-5 text-gray-600" />
-                          </div>
-                          <div className="flex-1">
-                            <h3 className="font-medium">{doc.name}</h3>
-                            <div className="flex items-center gap-2 mt-1 text-sm text-gray-500">
-                              <FolderIcon className="h-4 w-4" />
-                              {doc.category}
+                          <div className="flex items-start gap-3">
+                            <div className="p-2 bg-gray-100 rounded">
+                              <FileIcon className="h-5 w-5 text-gray-600" />
                             </div>
-                            <div className="mt-1 flex flex-wrap gap-1">
-                              {doc.tags.map((tag) => (
-                                <span
-                                  key={tag}
-                                  className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs"
-                                >
-                                  {tag}
-                                </span>
-                              ))}
+                            <div className="flex-1">
+                              <h3 className="font-medium">{doc.name}</h3>
+                              <div className="flex items-center gap-2 mt-1 text-sm text-gray-500">
+                                <FolderIcon className="h-4 w-4" />
+                                {doc.category}
+                              </div>
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {doc.tags.map((tag) => (
+                                  <span
+                                    key={tag}
+                                    className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs"
+                                  >
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
+                            <ShareDocumentDialog documentId={doc.id} />
                           </div>
-                          <ShareDocumentDialog documentId={doc.id} />
+                          <DocumentViewer document={doc} />
                         </div>
                       ))}
                     </div>
