@@ -58,10 +58,17 @@ export default function HomePage() {
           </div>
 
           <div className="space-y-8">
-            <DocumentSearch
-              categories={categories}
-              onSearch={setSearchParams}
-            />
+            <Card>
+              <CardHeader>
+                <CardTitle>Search Documents</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DocumentSearch
+                  categories={categories}
+                  onSearch={setSearchParams}
+                />
+              </CardContent>
+            </Card>
 
             <Card>
               <CardHeader>

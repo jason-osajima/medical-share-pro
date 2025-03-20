@@ -36,10 +36,8 @@ export default function DocumentSearch({ onSearch, categories }: DocumentSearchP
   const handleTagKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && currentTag.trim()) {
       e.preventDefault();
-      if (!filters.tags.includes(currentTag.trim())) {
-        const newTags = [...filters.tags, currentTag.trim()];
-        setFilters(prev => ({ ...prev, tags: newTags }));
-      }
+      const newTags = [...filters.tags, currentTag.trim()];
+      setFilters(prev => ({ ...prev, tags: newTags }));
       setCurrentTag("");
     }
   };
@@ -58,7 +56,7 @@ export default function DocumentSearch({ onSearch, categories }: DocumentSearchP
   };
 
   return (
-    <div className="space-y-4 p-4 border rounded-lg bg-card">
+    <div className="space-y-4">
       <div className="space-y-2">
         <Label>Search Documents</Label>
         <Input
