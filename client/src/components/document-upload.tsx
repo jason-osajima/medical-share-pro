@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,8 +50,7 @@ export default function DocumentUpload() {
       });
       if (!res.ok) {
         const errorData = await res.json();
-        const errorMessage = errorData.message || "Upload failed";
-        throw new Error(errorMessage);
+        throw new Error(errorData.message || "Upload failed");
       }
       return await res.json();
     },
@@ -98,33 +97,21 @@ export default function DocumentUpload() {
     setOcrSuccess(null);
 
     try {
-      console.log(`Starting OCR process for file: ${file.name}`);
       const worker = await createWorker({
-        logger: (m) => {
+        logger: m => {
           setOcrProgress(m.status);
           console.log(m.status);
         }
       });
+
       setOcrProgress("Loading language data...");
-      console.log("Loading language data...");
       await worker.loadLanguage('eng');
 
       setOcrProgress("Initializing engine...");
-      console.log("Initializing Tesseract...");
       await worker.initialize('eng');
 
-      setOcrProgress("Converting file...");
-      console.log("Converting file to data URL...");
-      const fileUrl = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(file);
-      });
-
       setOcrProgress("Processing text...");
-      console.log("Starting text recognition...");
-      const { data: { text } } = await worker.recognize(fileUrl);
-      console.log("OCR Text extracted:", text ? `${text.length} characters found` : "No text found");
+      const { data: { text } } = await worker.recognize(file);
 
       await worker.terminate();
 
@@ -135,7 +122,7 @@ export default function DocumentUpload() {
       setOcrSuccess(`OCR completed successfully! Extracted ${text.length} characters.`);
       return text;
     } catch (error) {
-      console.error('Detailed OCR Error:', error);
+      console.error('OCR Error:', error);
       throw new Error(error instanceof Error ? error.message : 'Failed to process document text');
     } finally {
       setIsProcessingOcr(false);
@@ -152,9 +139,6 @@ export default function DocumentUpload() {
       if (file.size > 5 * 1024 * 1024) {
         throw new Error("File size exceeds the limit (5MB)");
       }
-      if (!['application/pdf', 'image/jpeg', 'image/png'].includes(file.type)) {
-        throw new Error("Invalid file type. Only PDF, JPEG, and PNG are supported.");
-      }
 
       const formData = new FormData();
       formData.append("file", file);
@@ -164,21 +148,12 @@ export default function DocumentUpload() {
 
       if (file.type.startsWith('image/')) {
         try {
-          console.log(`Starting OCR for file type: ${file.type}`);
-          const worker = await createWorker({
-            logger: (m) => {
-              setOcrProgress(m.status);
-              console.log(m.status);
-            }
-          });
           const ocrText = await processOCR(file);
-          console.log("OCR completed successfully");
           formData.append("ocrText", ocrText);
           toast({
             title: "OCR Processing Complete",
             description: `Successfully extracted text from the image (${ocrText.length} characters)`,
           });
-          await worker.terminate();
         } catch (ocrError) {
           console.error('OCR Processing Error:', ocrError);
           toast({
