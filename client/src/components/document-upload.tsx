@@ -62,45 +62,45 @@ export default function DocumentUpload() {
     }
 
     setIsProcessingOcr(true);
-    setOcrProgress("Initializing OCR...");
+    setOcrProgress("Starting OCR process...");
     setOcrSuccess(null);
 
     try {
+      // Create a URL for the image file
+      const imageUrl = URL.createObjectURL(file);
+      console.log("Created image URL for OCR processing");
+
       const worker = await createWorker();
-      console.log("OCR worker created");
+      console.log("OCR worker created successfully");
 
       setOcrProgress("Loading language data...");
       await worker.loadLanguage('eng');
-      console.log("Language loaded");
+      console.log("English language data loaded");
 
-      setOcrProgress("Initializing engine...");
+      setOcrProgress("Initializing OCR engine...");
       await worker.initialize('eng');
-      console.log("Engine initialized");
+      console.log("OCR engine initialized");
 
-      // Convert file to base64
-      const base64Data = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(file);
-      });
+      setOcrProgress("Processing image...");
+      console.log("Starting image recognition...");
+      const { data: { text } } = await worker.recognize(imageUrl);
+      console.log("OCR result:", text ? `Extracted ${text.length} characters` : "No text extracted");
 
-      setOcrProgress("Processing text...");
-      console.log("Starting text recognition");
-      const { data: { text } } = await worker.recognize(base64Data);
-      console.log("Text recognition completed, length:", text?.length);
-
-      if (!text) {
-        throw new Error("No text could be extracted from the document");
-      }
-
+      // Clean up
+      URL.revokeObjectURL(imageUrl);
       await worker.terminate();
-      console.log("Worker terminated");
+      console.log("OCR worker terminated");
+
+      if (!text || text.trim().length === 0) {
+        throw new Error("No text could be extracted from the image");
+      }
 
       setOcrSuccess(`OCR completed successfully! Extracted ${text.length} characters.`);
       return text;
     } catch (error) {
       console.error('OCR Processing Error:', error);
-      throw new Error(error instanceof Error ? error.message : 'Failed to process document text');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process document text';
+      throw new Error(errorMessage);
     } finally {
       setIsProcessingOcr(false);
       setOcrProgress("");
