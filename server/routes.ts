@@ -83,9 +83,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         log(`Initializing Tesseract worker for document ${doc.id}`);
 
-        const worker = await createWorker();
-        await worker.loadLanguage('eng');
-        await worker.initialize('eng');
+        // Initialize worker with language specified
+        const worker = await createWorker({
+          langPath: process.cwd(), // Use local directory for language files
+          logger: progress => {
+            if (progress.status === 'recognizing text') {
+              log(`OCR Progress: ${progress.progress * 100}%`);
+            }
+          }
+        });
 
         log(`Processing file: ${doc.fileUrl}`);
 
