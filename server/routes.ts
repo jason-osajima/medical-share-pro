@@ -3,13 +3,10 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import multer from "multer";
-import { insertDocumentSchema, insertAppointmentSchema, setupTotpSchema, verifyTotpSchema } from "@shared/schema";
+import { insertDocumentSchema, insertAppointmentSchema } from "@shared/schema";
 import { generateTotpSecret, verifyTotp, generateQrCodeUrl } from "./totp";
 import OpenAI from "openai";
 import { log } from "./vite";
-import sharp from "sharp";
-import { createWorker } from "tesseract.js";
-import fs from "fs";
 
 const upload = multer({ dest: "uploads/" });
 
@@ -20,7 +17,7 @@ const openai = new OpenAI({
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
 
-  // Document upload route with improved OCR handling
+  // Document upload route - simplified without OCR
   app.post("/api/documents", upload.single("file"), async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     if (!req.file) return res.status(400).send("No file uploaded");
@@ -33,13 +30,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fileUrl: req.file.path,
       });
 
-      // Create document with pending OCR status
-      const doc = await storage.createDocument(req.user!.id, {
-        ...docData,
-        ocrStatus: 'pending',
-        ocrError: null,
-      });
-
+      const doc = await storage.createDocument(req.user!.id, docData);
       res.status(201).json(doc);
     } catch (error) {
       console.error('Document upload error:', error);
@@ -49,86 +40,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Process OCR endpoint
-  app.post("/api/documents/:id/process-ocr", async (req, res) => {
+  app.get("/api/documents", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
     try {
-      const documentId = parseInt(req.params.id);
-      const doc = await storage.getDocument(documentId);
+      const { query, category, tags, startDate, endDate } = req.query;
+      console.log('Document search request:', { query, category, tags, startDate, endDate });
 
-      if (!doc || doc.userId !== req.user!.id) {
-        return res.status(404).json({ message: "Document not found" });
+      const docs = await storage.getUserDocuments(req.user!.id);
+
+      // Apply filters
+      let filteredDocs = docs;
+
+      if (query) {
+        const searchQuery = (query as string).toLowerCase();
+        console.log('Applying text search:', searchQuery);
+        filteredDocs = filteredDocs.filter(doc => 
+          doc.name.toLowerCase().includes(searchQuery)
+        );
       }
 
-      log(`Starting OCR processing for document ${documentId}`);
-
-      // First verify the file exists
-      if (!fs.existsSync(doc.fileUrl)) {
-        const error = `File not found at path: ${doc.fileUrl}`;
-        log(error);
-        await storage.updateDocument(doc.id, {
-          ocrStatus: 'error',
-          ocrError: error,
-        });
-        return res.status(404).json({ message: error });
+      if (category) {
+        console.log('Applying category filter:', category);
+        filteredDocs = filteredDocs.filter(doc => 
+          doc.category === category
+        );
       }
 
-      // Update status to processing
-      await storage.updateDocument(doc.id, {
-        ocrStatus: 'processing',
-        ocrError: null,
-      });
-
-      try {
-        log(`Initializing Tesseract worker for document ${doc.id}`);
-
-        // Initialize worker with language specified
-        const worker = await createWorker({
-          langPath: process.cwd(), // Use local directory for language files
-          logger: progress => {
-            if (progress.status === 'recognizing text') {
-              log(`OCR Progress: ${progress.progress * 100}%`);
-            }
-          }
-        });
-
-        log(`Processing file: ${doc.fileUrl}`);
-
-        // Process image with tesseract
-        const result = await worker.recognize(doc.fileUrl);
-        await worker.terminate();
-
-        if (!result.data.text || result.data.text.trim() === '') {
-          throw new Error('No text could be extracted from document');
-        }
-
-        log(`OCR completed for document ${doc.id}, extracted ${result.data.text.length} characters`);
-
-        // Update document with OCR results
-        const updated = await storage.updateDocument(doc.id, {
-          ocrText: result.data.text,
-          ocrStatus: 'completed',
-          ocrError: null,
-        });
-
-        res.json(updated);
-      } catch (ocrError) {
-        log(`OCR Error for document ${doc.id}: ${ocrError?.message}`);
-        const error = ocrError instanceof Error ? ocrError.message : 'Failed to process document';
-
-        await storage.updateDocument(doc.id, {
-          ocrStatus: 'error',
-          ocrError: error,
-        });
-
-        res.status(500).json({ message: error });
+      if (tags) {
+        const searchTags = JSON.parse(tags as string);
+        console.log('Applying tag filters:', searchTags);
+        filteredDocs = filteredDocs.filter(doc =>
+          searchTags.every((tag: string) => doc.tags.includes(tag))
+        );
       }
+
+      if (startDate) {
+        const start = new Date(startDate as string);
+        console.log('Applying start date filter:', start);
+        filteredDocs = filteredDocs.filter(doc =>
+          new Date(doc.uploadedAt) >= start
+        );
+      }
+
+      if (endDate) {
+        const end = new Date(endDate as string);
+        end.setHours(23, 59, 59, 999); // Include the entire end date
+        console.log('Applying end date filter:', end);
+        filteredDocs = filteredDocs.filter(doc =>
+          new Date(doc.uploadedAt) <= end
+        );
+      }
+
+      console.log(`Found ${filteredDocs.length} documents after applying filters`);
+      res.json(filteredDocs);
     } catch (error) {
-      console.error('OCR processing error:', error);
-      res.status(500).json({ 
-        message: error instanceof Error ? error.message : 'Failed to process document' 
-      });
+      console.error('Document search error:', error);
+      res.status(500).json({ message: 'Failed to search documents' });
     }
   });
 
@@ -198,116 +166,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-
-  app.get("/api/documents", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-
-    try {
-      const { query, category, tags, startDate, endDate } = req.query;
-      console.log('Document search request:', { query, category, tags, startDate, endDate });
-
-      const docs = await storage.getUserDocuments(req.user!.id);
-
-      // Apply filters
-      let filteredDocs = docs;
-
-      if (query) {
-        const searchQuery = (query as string).toLowerCase();
-        console.log('Applying text search:', searchQuery);
-        filteredDocs = filteredDocs.filter(doc => 
-          doc.name.toLowerCase().includes(searchQuery) ||
-          (doc.ocrText && doc.ocrText.toLowerCase().includes(searchQuery))
-        );
-      }
-
-      if (category) {
-        console.log('Applying category filter:', category);
-        filteredDocs = filteredDocs.filter(doc => 
-          doc.category === category
-        );
-      }
-
-      if (tags) {
-        const searchTags = JSON.parse(tags as string);
-        console.log('Applying tag filters:', searchTags);
-        filteredDocs = filteredDocs.filter(doc =>
-          searchTags.every((tag: string) => doc.tags.includes(tag))
-        );
-      }
-
-      if (startDate) {
-        const start = new Date(startDate as string);
-        console.log('Applying start date filter:', start);
-        filteredDocs = filteredDocs.filter(doc =>
-          new Date(doc.uploadedAt) >= start
-        );
-      }
-
-      if (endDate) {
-        const end = new Date(endDate as string);
-        end.setHours(23, 59, 59, 999); // Include the entire end date
-        console.log('Applying end date filter:', end);
-        filteredDocs = filteredDocs.filter(doc =>
-          new Date(doc.uploadedAt) <= end
-        );
-      }
-
-      console.log(`Found ${filteredDocs.length} documents after applying filters`);
-      res.json(filteredDocs);
-    } catch (error) {
-      console.error('Document search error:', error);
-      res.status(500).json({ message: 'Failed to search documents' });
-    }
-  });
-
-  // Generate share link for a document
-  app.post("/api/documents/:id/share", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-
-    try {
-      const documentId = parseInt(req.params.id);
-      const doc = await storage.getDocument(documentId);
-
-      if (!doc || doc.userId !== req.user!.id) {
-        return res.status(404).json({ message: "Document not found" });
-      }
-
-      const shareLink = await storage.createShareLink(documentId, req.body);
-      res.status(201).json({
-        ...shareLink,
-        url: `${req.protocol}://${req.get('host')}/shared/${shareLink.token}`,
-      });
-    } catch (error) {
-      console.error('Share link creation error:', error);
-      res.status(400).json({ 
-        message: error instanceof Error ? error.message : 'Failed to create share link' 
-      });
-    }
-  });
-
-  // Get all share links for a document
-  app.get("/api/documents/:id/share", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-
-    try {
-      const documentId = parseInt(req.params.id);
-      const doc = await storage.getDocument(documentId);
-
-      if (!doc || doc.userId !== req.user!.id) {
-        return res.status(404).json({ message: "Document not found" });
-      }
-
-      const links = await storage.getDocumentShareLinks(documentId);
-      const shareLinks = links.map(link => ({
-        ...link,
-        url: `${req.protocol}://${req.get('host')}/shared/${link.token}`,
-      }));
-
-      res.json(shareLinks);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch share links" });
-    }
-  });
 
   // Add this endpoint after the existing document routes
   app.post("/api/documents/:id/summarize", async (req, res) => {
