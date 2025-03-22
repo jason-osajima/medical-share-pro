@@ -84,11 +84,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         log(`Initializing Tesseract worker for document ${doc.id}`);
 
         const worker = await createWorker();
-
-        // Use built-in logging mechanism
-        worker.logger.subscribe(m => {
-          log(`Tesseract progress [${doc.id}]: ${JSON.stringify(m)}`);
-        });
+        await worker.loadLanguage('eng');
+        await worker.initialize('eng');
 
         log(`Processing file: ${doc.fileUrl}`);
 
@@ -111,7 +108,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         res.json(updated);
       } catch (ocrError) {
-        log(`OCR Error for document ${doc.id}: ${ocrError.message}`);
+        log(`OCR Error for document ${doc.id}: ${ocrError?.message}`);
         const error = ocrError instanceof Error ? ocrError.message : 'Failed to process document';
 
         await storage.updateDocument(doc.id, {
