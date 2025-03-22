@@ -17,6 +17,11 @@ import models
 import schemas
 from database import engine, get_db
 from auth import authenticate_user, create_access_token, get_current_user, get_password_hash
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Create database tables
 models.Base.metadata.create_all(bind=engine)
@@ -40,24 +45,35 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 async def process_image_ocr(image: Image.Image) -> str:
     """Extract text from an image using pytesseract."""
     try:
-        return pytesseract.image_to_string(image)
+        logger.info("Starting OCR processing for image")
+        text = pytesseract.image_to_string(image)
+        logger.info(f"OCR completed, extracted {len(text)} characters")
+        return text
     except Exception as e:
+        logger.error(f"OCR processing failed: {str(e)}")
         raise Exception(f"Failed to extract text from image: {str(e)}")
 
 async def process_pdf_ocr(pdf_path: str) -> str:
     """Convert PDF to images and extract text using pytesseract."""
     try:
+        logger.info(f"Starting PDF processing: {pdf_path}")
         # Convert PDF pages to images
+        logger.info("Converting PDF to images")
         images = convert_from_path(pdf_path)
+        logger.info(f"Converted PDF to {len(images)} pages")
 
         # Process each page
         text_parts = []
         for i, image in enumerate(images, 1):
+            logger.info(f"Processing page {i}/{len(images)}")
             page_text = await process_image_ocr(image)
             text_parts.append(f"--- Page {i} ---\n{page_text}\n")
 
-        return "\n".join(text_parts)
+        final_text = "\n".join(text_parts)
+        logger.info(f"Completed PDF OCR, total characters: {len(final_text)}")
+        return final_text
     except Exception as e:
+        logger.error(f"PDF processing failed: {str(e)}")
         raise Exception(f"Failed to process PDF: {str(e)}")
 
 # Auth routes
@@ -180,6 +196,8 @@ async def process_document_ocr(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    logger.info(f"Starting OCR request for document {document_id}")
+
     # Get document
     document = db.query(models.Document).filter(
         models.Document.id == document_id,
@@ -187,10 +205,14 @@ async def process_document_ocr(
     ).first()
 
     if not document:
+        logger.error(f"Document {document_id} not found")
         raise HTTPException(status_code=404, detail="Document not found")
 
     file_ext = os.path.splitext(document.file_url)[1].lower()
+    logger.info(f"Document file extension: {file_ext}")
+
     if file_ext not in ['.pdf', '.png', '.jpg', '.jpeg']:
+        logger.error(f"Unsupported file type: {file_ext}")
         raise HTTPException(
             status_code=400, 
             detail="OCR is only supported for PDF and image files (PNG, JPG)"
@@ -198,6 +220,7 @@ async def process_document_ocr(
 
     async def process_ocr():
         try:
+            logger.info(f"Starting OCR processing for document {document_id}")
             # Update status to processing
             document.ocr_status = "processing"
             document.ocr_error = None
@@ -205,8 +228,10 @@ async def process_document_ocr(
 
             # Process based on file type
             if file_ext == '.pdf':
+                logger.info("Processing PDF file")
                 text = await process_pdf_ocr(document.file_url)
             else:  # Image file
+                logger.info("Processing image file")
                 image = Image.open(document.file_url)
                 text = await process_image_ocr(image)
 
@@ -216,18 +241,41 @@ async def process_document_ocr(
             # Update document with OCR results
             document.ocr_text = text
             document.ocr_status = "completed"
+            logger.info(f"OCR completed successfully, extracted {len(text)} characters")
             db.commit()
 
         except Exception as e:
+            error_msg = str(e)
+            logger.error(f"OCR Error for document {document_id}: {error_msg}")
             document.ocr_status = "error"
-            document.ocr_error = str(e)
+            document.ocr_error = error_msg
             db.commit()
-            print(f"OCR Error for document {document_id}: {str(e)}")
 
     # Start OCR processing in background
     background_tasks.add_task(process_ocr)
+    logger.info(f"OCR task scheduled for document {document_id}")
 
     return {"message": "OCR processing started"}
+
+@app.get("/api/documents/{document_id}/ocr-status")
+async def get_ocr_status(
+    document_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    document = db.query(models.Document).filter(
+        models.Document.id == document_id,
+        models.Document.user_id == current_user.id
+    ).first()
+
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    return {
+        "status": document.ocr_status,
+        "error": document.ocr_error,
+        "text_length": len(document.ocr_text) if document.ocr_text else 0
+    }
 
 @app.post("/api/documents/{document_id}/summarize")
 async def summarize_document(
