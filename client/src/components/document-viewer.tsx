@@ -47,6 +47,11 @@ export default function DocumentViewer({ document }: DocumentViewerProps) {
     },
   });
 
+  const handleProcessOcr = (e: React.MouseEvent) => {
+    e.preventDefault();
+    processOcrMutation.mutate();
+  };
+
   return (
     <div className="space-y-4 border-t pt-4 mt-4">
       <div className="flex items-center justify-between">
@@ -62,7 +67,7 @@ export default function DocumentViewer({ document }: DocumentViewerProps) {
         {/* Show Process OCR button when appropriate */}
         {(!document.ocrText || document.ocrStatus === "error") && (
           <Button
-            onClick={() => processOcrMutation.mutate()}
+            onClick={handleProcessOcr}
             disabled={processOcrMutation.isPending || document.ocrStatus === "processing"}
             size="sm"
             variant="outline"
