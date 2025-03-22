@@ -6,6 +6,9 @@ import multer from "multer";
 import { insertDocumentSchema, insertAppointmentSchema, setupTotpSchema, verifyTotpSchema } from "@shared/schema";
 import { generateTotpSecret, verifyTotp, generateQrCodeUrl } from "./totp";
 import OpenAI from "openai";
+import { log } from "./vite";
+import sharp from "sharp";
+import { createWorker } from "tesseract.js";
 
 const upload = multer({ dest: "uploads/" });
 
@@ -15,6 +18,63 @@ const openai = new OpenAI({
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
+
+  // Document upload route with improved OCR handling
+  app.post("/api/documents", upload.single("file"), async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (!req.file) return res.status(400).send("No file uploaded");
+
+    try {
+      const tags = JSON.parse(req.body.tags);
+      const docData = insertDocumentSchema.parse({
+        ...req.body,
+        tags,
+        fileUrl: req.file.path,
+      });
+
+      // Create document with pending OCR status
+      const doc = await storage.createDocument(req.user!.id, {
+        ...docData,
+        ocrStatus: 'processing',
+        ocrError: null,
+      });
+
+      // Process OCR in background
+      try {
+        log(`Starting OCR for document ${doc.id}`);
+        const worker = await createWorker();
+        const result = await worker.recognize(req.file.path);
+        await worker.terminate();
+
+        if (!result.data.text || result.data.text.trim() === '') {
+          throw new Error('No text extracted from document');
+        }
+
+        log(`OCR completed for document ${doc.id}, extracted ${result.data.text.length} characters`);
+
+        // Update document with OCR results
+        await storage.updateDocument(doc.id, {
+          ocrText: result.data.text,
+          ocrStatus: 'completed',
+          ocrError: null,
+        });
+
+      } catch (ocrError) {
+        log(`OCR Error for document ${doc.id}: ${ocrError.message}`);
+        await storage.updateDocument(doc.id, {
+          ocrStatus: 'error',
+          ocrError: ocrError.message,
+        });
+      }
+
+      res.status(201).json(doc);
+    } catch (error) {
+      console.error('Document upload error:', error);
+      res.status(400).json({ 
+        message: error instanceof Error ? error.message : 'Failed to upload document' 
+      });
+    }
+  });
 
   // 2FA Routes
   app.post("/api/2fa/setup", async (req, res) => {
@@ -82,35 +142,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Document upload route with improved OCR handling
-  app.post("/api/documents", upload.single("file"), async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-    if (!req.file) return res.status(400).send("No file uploaded");
-
-    try {
-      const tags = JSON.parse(req.body.tags);
-      const docData = insertDocumentSchema.parse({
-        ...req.body,
-        tags,
-        fileUrl: req.file.path,
-      });
-
-      // Create document with OCR text if provided
-      const doc = await storage.createDocument(req.user!.id, {
-        ...docData,
-        ocrText: req.body.ocrText || null,
-        ocrStatus: req.body.ocrText ? 'completed' : 'pending',
-        ocrError: null, // Reset any previous error
-      });
-
-      res.status(201).json(doc);
-    } catch (error) {
-      console.error('Document upload error:', error);
-      res.status(400).json({ 
-        message: error instanceof Error ? error.message : 'Failed to upload document' 
-      });
-    }
-  });
 
   app.get("/api/documents", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
@@ -219,6 +250,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(shareLinks);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch share links" });
+    }
+  });
+
+  // Add this endpoint after the existing document routes
+  app.post("/api/documents/:id/process-ocr", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const documentId = parseInt(req.params.id);
+      const doc = await storage.getDocument(documentId);
+
+      if (!doc || doc.userId !== req.user!.id) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      log(`Starting OCR processing for document ${documentId}`);
+
+      // Update status to processing
+      await storage.updateDocument(doc.id, {
+        ocrStatus: 'processing',
+        ocrError: null,
+      });
+
+      const worker = await createWorker();
+      const result = await worker.recognize(doc.fileUrl);
+      await worker.terminate();
+
+      if (!result.data.text || result.data.text.trim() === '') {
+        throw new Error('No text extracted from document');
+      }
+
+      log(`OCR completed for document ${doc.id}, extracted ${result.data.text.length} characters`);
+
+      // Update document with OCR results
+      const updated = await storage.updateDocument(doc.id, {
+        ocrText: result.data.text,
+        ocrStatus: 'completed',
+        ocrError: null,
+      });
+
+      res.json(updated);
+    } catch (error) {
+      console.error('OCR processing error:', error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : 'Failed to process document' 
+      });
     }
   });
 
