@@ -129,9 +129,11 @@ async def create_document(
     name: str = Form(...),
     category: str = Form(...),
     tags: str = Form(...),
+    background_tasks: BackgroundTasks,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    logger.info(f"Starting document upload: {file.filename}")
     tags_list = json.loads(tags)
 
     # Validate file type
@@ -143,6 +145,7 @@ async def create_document(
 
     # Save file
     file_path = f"uploads/{file.filename}"
+    logger.info(f"Saving file to: {file_path}")
     with open(file_path, "wb") as buffer:
         content = await file.read()
         buffer.write(content)
@@ -161,6 +164,46 @@ async def create_document(
     db.add(db_document)
     db.commit()
     db.refresh(db_document)
+
+    # Start OCR processing immediately
+    logger.info(f"Starting OCR processing for document {db_document.id}")
+    async def process_ocr():
+        try:
+            # Update status to processing
+            db_document.ocr_status = "processing"
+            db_document.ocr_error = None
+            db.commit()
+
+            file_ext = os.path.splitext(file_path)[1].lower()
+            # Process based on file type
+            if file_ext == '.pdf':
+                logger.info("Processing PDF file")
+                text = await process_pdf_ocr(file_path)
+            else:  # Image file
+                logger.info("Processing image file")
+                image = Image.open(file_path)
+                text = await process_image_ocr(image)
+
+            if not text or text.strip() == "":
+                raise Exception("No text could be extracted from the document")
+
+            # Update document with OCR results
+            db_document.ocr_text = text
+            db_document.ocr_status = "completed"
+            logger.info(f"OCR completed successfully, extracted {len(text)} characters")
+            db.commit()
+
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"OCR Error for document {db_document.id}: {error_msg}")
+            db_document.ocr_status = "error"
+            db_document.ocr_error = error_msg
+            db.commit()
+
+    # Start OCR processing in background
+    background_tasks.add_task(process_ocr)
+    logger.info(f"OCR task scheduled for document {db_document.id}")
+
     return db_document
 
 @app.get("/api/documents", response_model=List[schemas.Document])
