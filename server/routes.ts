@@ -9,6 +9,7 @@ import OpenAI from "openai";
 import { log } from "./vite";
 import sharp from "sharp";
 import { createWorker } from "tesseract.js";
+import fs from "fs";
 
 const upload = multer({ dest: "uploads/" });
 
@@ -62,6 +63,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       log(`Starting OCR processing for document ${documentId}`);
 
+      // First verify the file exists
+      if (!fs.existsSync(doc.fileUrl)) {
+        const error = `File not found at path: ${doc.fileUrl}`;
+        log(error);
+        await storage.updateDocument(doc.id, {
+          ocrStatus: 'error',
+          ocrError: error,
+        });
+        return res.status(404).json({ message: error });
+      }
+
       // Update status to processing
       await storage.updateDocument(doc.id, {
         ocrStatus: 'processing',
@@ -69,8 +81,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       try {
-        // Initialize worker
-        const worker = await createWorker();
+        log(`Initializing Tesseract worker for document ${doc.id}`);
+
+        // Initialize worker with detailed logging
+        const worker = await createWorker({
+          logger: m => log(`Tesseract worker [${doc.id}]: ${JSON.stringify(m)}`),
+        });
+
+        log(`Processing file: ${doc.fileUrl}`);
 
         // Process image with tesseract
         const result = await worker.recognize(doc.fileUrl);

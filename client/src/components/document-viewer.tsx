@@ -49,6 +49,7 @@ export default function DocumentViewer({ document }: DocumentViewerProps) {
 
   const handleProcessOcr = (e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     processOcrMutation.mutate();
   };
 
