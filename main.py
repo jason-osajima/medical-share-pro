@@ -46,11 +46,16 @@ async def process_image_ocr(image: Image.Image) -> str:
     """Extract text from an image using pytesseract."""
     try:
         logger.info("Starting OCR processing for image")
+        # Add version check
+        version = pytesseract.get_tesseract_version()
+        logger.info(f"Tesseract version: {version}")
+
         text = pytesseract.image_to_string(image)
         logger.info(f"OCR completed, extracted {len(text)} characters")
         return text
     except Exception as e:
         logger.error(f"OCR processing failed: {str(e)}")
+        logger.error(f"Full error: {repr(e)}")
         raise Exception(f"Failed to extract text from image: {str(e)}")
 
 async def process_pdf_ocr(pdf_path: str) -> str:
@@ -257,7 +262,7 @@ async def process_document_ocr(
     if file_ext not in ['.pdf', '.png', '.jpg', '.jpeg']:
         logger.error(f"Unsupported file type: {file_ext}")
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail="OCR is only supported for PDF and image files (PNG, JPG)"
         )
 
