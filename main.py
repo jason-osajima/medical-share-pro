@@ -43,6 +43,29 @@ os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Adding logging wrapper to the OCR process
+async def preprocess_image(image: Image.Image) -> Image.Image:
+    """Preprocess image to improve OCR accuracy."""
+    try:
+        logger.info("Starting image preprocessing")
+        # Convert to grayscale
+        image = image.convert('L')
+        
+        # Increase contrast
+        image = image.point(lambda x: 0 if x < 128 else 255, '1')
+        
+        # Resize if too large (max 4000px on longest side)
+        max_size = 4000
+        if max(image.size) > max_size:
+            ratio = max_size / max(image.size)
+            new_size = tuple(int(dim * ratio) for dim in image.size)
+            image = image.resize(new_size, Image.LANCZOS)
+            logger.info(f"Resized image to {new_size}")
+            
+        return image
+    except Exception as e:
+        logger.error(f"Image preprocessing failed: {str(e)}")
+        raise Exception(f"Failed to preprocess image: {str(e)}")
+
 async def process_image_ocr(image: Image.Image) -> str:
     """Extract text from an image using pytesseract."""
     try:
@@ -51,9 +74,27 @@ async def process_image_ocr(image: Image.Image) -> str:
         version = pytesseract.get_tesseract_version()
         logger.info(f"Tesseract version: {version}")
 
-        text = pytesseract.image_to_string(image)
+        # Preprocess image
+        image = await preprocess_image(image)
+        
+        # Add timeout mechanism
+        async def ocr_task():
+            return pytesseract.image_to_string(
+                image,
+                config='--psm 3 --oem 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,!?@#$%^&*()[]{}<>-_=+;:"/\\ '
+            )
+
+        # Set 30 second timeout
+        text = await asyncio.wait_for(ocr_task(), timeout=30.0)
+        
+        if not text.strip():
+            raise Exception("No text extracted from image")
+            
         logger.info(f"OCR completed, extracted {len(text)} characters")
         return text
+    except asyncio.TimeoutError:
+        logger.error("OCR processing timed out after 30 seconds")
+        raise Exception("OCR processing timed out. Please try again with a smaller or clearer image")
     except Exception as e:
         logger.error(f"OCR processing failed: {str(e)}")
         logger.error(f"Full error: {repr(e)}")
@@ -140,20 +181,35 @@ async def create_document(
     db: Session = Depends(get_db)
 ):
     logger.info(f"Starting document upload: {file.filename}")
-    tags_list = json.loads(tags)
-
-    # Validate file type
-    if not file.content_type in ['image/jpeg', 'image/png', 'application/pdf']:
+    
+    # Enhanced file validation
+    allowed_types = {
+        'image/jpeg': ['.jpg', '.jpeg'],
+        'image/png': ['.png'],
+        'application/pdf': ['.pdf']
+    }
+    
+    file_ext = os.path.splitext(file.filename)[1].lower()
+    if not (file.content_type in allowed_types and file_ext in allowed_types[file.content_type]):
         raise HTTPException(
             status_code=400,
-            detail="Invalid file type. Only JPEG, PNG, and PDF files are supported."
+            detail=f"Invalid file type. Supported formats: {', '.join([ext for exts in allowed_types.values() for ext in exts])}"
         )
-
-    # Save file
-    file_path = f"uploads/{file.filename}"
+        
+    # Check file size (max 10MB)
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:  # 10MB in bytes
+        raise HTTPException(
+            status_code=400,
+            detail="File size exceeds maximum limit of 10MB"
+        )
+        
+    # Save file with secure filename
+    secure_filename = f"{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{file.filename}"
+    file_path = f"uploads/{secure_filename}"
     logger.info(f"Saving file to: {file_path}")
+    
     with open(file_path, "wb") as buffer:
-        content = await file.read()
         buffer.write(content)
 
     # Create document
@@ -161,7 +217,7 @@ async def create_document(
         user_id=current_user.id,
         name=name,
         category=category,
-        tags=json.dumps(tags_list),
+        tags=json.dumps(json.loads(tags)),
         file_url=file_path,
         uploaded_at=datetime.utcnow(),
         ocr_status="pending"
