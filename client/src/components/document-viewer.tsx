@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Document } from "@shared/schema";
 import { Button } from "@/components/ui/button";
@@ -15,41 +15,6 @@ interface DocumentViewerProps {
 export default function DocumentViewer({ document }: DocumentViewerProps) {
   const { toast } = useToast();
   const [isExpanded, setIsExpanded] = useState(false);
-  const [processingProgress, setProcessingProgress] = useState<string>("");
-
-  // Add polling for OCR status
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout;
-    
-    if (document.ocrStatus === "processing") {
-      intervalId = setInterval(async () => {
-        try {
-          const res = await fetch(`/api/documents/${document.id}/ocr-status`);
-          const data = await res.json();
-          
-          if (data.status === "completed") {
-            queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
-            toast({
-              title: "OCR processing completed",
-              description: `Successfully extracted ${data.text_length} characters.`,
-            });
-          } else if (data.status === "error") {
-            toast({
-              title: "OCR processing failed",
-              description: data.error,
-              variant: "destructive",
-            });
-          }
-        } catch (error) {
-          console.error("Failed to check OCR status:", error);
-        }
-      }, 3000); // Poll every 3 seconds
-    }
-
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [document.ocrStatus, document.id]);
 
   const processOcrMutation = useMutation({
     mutationFn: async () => {
@@ -67,14 +32,13 @@ export default function DocumentViewer({ document }: DocumentViewerProps) {
       return res.json();
     },
     onSuccess: () => {
-      setProcessingProgress("Starting OCR processing...");
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
       toast({
         title: "OCR processing started",
         description: "The document is being processed. This may take a moment.",
       });
     },
     onError: (error: Error) => {
-      setProcessingProgress("");
       toast({
         title: "OCR processing failed",
         description: error.message,
@@ -83,10 +47,16 @@ export default function DocumentViewer({ document }: DocumentViewerProps) {
     },
   });
 
-  const handleProcessOcr = (e: React.MouseEvent) => {
+  const handleProcessOcr = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
     processOcrMutation.mutate();
+  };
+
+  const handleExpandToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsExpanded(!isExpanded);
   };
 
   return (
@@ -94,16 +64,16 @@ export default function DocumentViewer({ document }: DocumentViewerProps) {
       <div className="flex items-center justify-between">
         <Button
           variant="ghost"
-          onClick={() => setIsExpanded(!isExpanded)}
+          onClick={handleExpandToggle}
           className="text-sm"
         >
           <FileText className="h-4 w-4 mr-2" />
           {isExpanded ? "Hide Content" : "Show Content"}
         </Button>
 
-        {/* Show Process OCR button when appropriate */}
         {(!document.ocrText || document.ocrStatus === "error") && (
           <Button
+            type="button"
             onClick={handleProcessOcr}
             disabled={processOcrMutation.isPending || document.ocrStatus === "processing"}
             size="sm"
@@ -119,7 +89,6 @@ export default function DocumentViewer({ document }: DocumentViewerProps) {
 
       {isExpanded && (
         <div className="space-y-4">
-          {/* Show OCR Status */}
           {document.ocrStatus === "processing" && (
             <div className="flex flex-col items-center justify-center py-4 space-y-2">
               <div className="flex items-center">
@@ -128,9 +97,6 @@ export default function DocumentViewer({ document }: DocumentViewerProps) {
                   Processing document...
                 </span>
               </div>
-              {processingProgress && (
-                <span className="text-xs text-gray-500">{processingProgress}</span>
-              )}
             </div>
           )}
 
