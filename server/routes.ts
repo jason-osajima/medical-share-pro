@@ -35,43 +35,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create document with pending OCR status
       const doc = await storage.createDocument(req.user!.id, {
         ...docData,
-        ocrStatus: 'processing',
+        ocrStatus: 'pending',
         ocrError: null,
       });
-
-      // Process OCR in background
-      try {
-        log(`Starting OCR for document ${doc.id}`);
-        const worker = await createWorker();
-        const result = await worker.recognize(req.file.path);
-        await worker.terminate();
-
-        if (!result.data.text || result.data.text.trim() === '') {
-          throw new Error('No text extracted from document');
-        }
-
-        log(`OCR completed for document ${doc.id}, extracted ${result.data.text.length} characters`);
-
-        // Update document with OCR results
-        await storage.updateDocument(doc.id, {
-          ocrText: result.data.text,
-          ocrStatus: 'completed',
-          ocrError: null,
-        });
-
-      } catch (ocrError) {
-        log(`OCR Error for document ${doc.id}: ${ocrError.message}`);
-        await storage.updateDocument(doc.id, {
-          ocrStatus: 'error',
-          ocrError: ocrError.message,
-        });
-      }
 
       res.status(201).json(doc);
     } catch (error) {
       console.error('Document upload error:', error);
       res.status(400).json({ 
         message: error instanceof Error ? error.message : 'Failed to upload document' 
+      });
+    }
+  });
+
+  // Process OCR endpoint
+  app.post("/api/documents/:id/process-ocr", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const documentId = parseInt(req.params.id);
+      const doc = await storage.getDocument(documentId);
+
+      if (!doc || doc.userId !== req.user!.id) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      log(`Starting OCR processing for document ${documentId}`);
+
+      // Update status to processing
+      await storage.updateDocument(doc.id, {
+        ocrStatus: 'processing',
+        ocrError: null,
+      });
+
+      try {
+        // Initialize worker
+        const worker = await createWorker();
+
+        // Process image with tesseract
+        const result = await worker.recognize(doc.fileUrl);
+        await worker.terminate();
+
+        if (!result.data.text || result.data.text.trim() === '') {
+          throw new Error('No text could be extracted from document');
+        }
+
+        log(`OCR completed for document ${doc.id}, extracted ${result.data.text.length} characters`);
+
+        // Update document with OCR results
+        const updated = await storage.updateDocument(doc.id, {
+          ocrText: result.data.text,
+          ocrStatus: 'completed',
+          ocrError: null,
+        });
+
+        res.json(updated);
+      } catch (ocrError) {
+        log(`OCR Error for document ${doc.id}: ${ocrError.message}`);
+        const error = ocrError instanceof Error ? ocrError.message : 'Failed to process document';
+
+        await storage.updateDocument(doc.id, {
+          ocrStatus: 'error',
+          ocrError: error,
+        });
+
+        res.status(500).json({ message: error });
+      }
+    } catch (error) {
+      console.error('OCR processing error:', error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : 'Failed to process document' 
       });
     }
   });
@@ -254,108 +287,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Add this endpoint after the existing document routes
-  app.post("/api/documents/:id/process-ocr", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-
-    try {
-      const documentId = parseInt(req.params.id);
-      const doc = await storage.getDocument(documentId);
-
-      if (!doc || doc.userId !== req.user!.id) {
-        return res.status(404).json({ message: "Document not found" });
-      }
-
-      log(`Starting OCR processing for document ${documentId}`);
-
-      // Update status to processing
-      await storage.updateDocument(doc.id, {
-        ocrStatus: 'processing',
-        ocrError: null,
-      });
-
-      const worker = await createWorker();
-      const result = await worker.recognize(doc.fileUrl);
-      await worker.terminate();
-
-      if (!result.data.text || result.data.text.trim() === '') {
-        throw new Error('No text extracted from document');
-      }
-
-      log(`OCR completed for document ${doc.id}, extracted ${result.data.text.length} characters`);
-
-      // Update document with OCR results
-      const updated = await storage.updateDocument(doc.id, {
-        ocrText: result.data.text,
-        ocrStatus: 'completed',
-        ocrError: null,
-      });
-
-      res.json(updated);
-    } catch (error) {
-      console.error('OCR processing error:', error);
-      res.status(500).json({ 
-        message: error instanceof Error ? error.message : 'Failed to process document' 
-      });
-    }
-  });
-
-  // Access shared document
-  app.get("/api/shared/:token", async (req, res) => {
-    try {
-      const doc = await storage.getSharedDocument(req.params.token);
-      if (!doc) {
-        return res.status(404).json({ message: "Document not found or link expired" });
-      }
-      res.json(doc);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch shared document" });
-    }
-  });
-
-
-  // Appointments
-  app.post("/api/appointments", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-    
-    const apptData = insertAppointmentSchema.parse(req.body);
-    const appt = await storage.createAppointment(req.user!.id, apptData);
-    res.status(201).json(appt);
-  });
-
-  app.get("/api/appointments", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-    const appts = await storage.getUserAppointments(req.user!.id);
-    res.json(appts);
-  });
-
-  app.patch("/api/appointments/:id", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-    
-    const appt = await storage.getAppointment(Number(req.params.id));
-    if (!appt || appt.userId !== req.user!.id) {
-      return res.sendStatus(404);
-    }
-
-    const updated = await storage.updateAppointment(
-      appt.id,
-      insertAppointmentSchema.partial().parse(req.body)
-    );
-    res.json(updated);
-  });
-
-  app.delete("/api/appointments/:id", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-    
-    const appt = await storage.getAppointment(Number(req.params.id));
-    if (!appt || appt.userId !== req.user!.id) {
-      return res.sendStatus(404);
-    }
-
-    await storage.deleteAppointment(appt.id);
-    res.sendStatus(204);
-  });
-
-  // Add this inside registerRoutes function, after the existing document routes
   app.post("/api/documents/:id/summarize", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
@@ -419,6 +350,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: error instanceof Error ? error.message : "Failed to summarize document" 
       });
     }
+  });
+
+  // Access shared document
+  app.get("/api/shared/:token", async (req, res) => {
+    try {
+      const doc = await storage.getSharedDocument(req.params.token);
+      if (!doc) {
+        return res.status(404).json({ message: "Document not found or link expired" });
+      }
+      res.json(doc);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch shared document" });
+    }
+  });
+
+
+  // Appointments
+  app.post("/api/appointments", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    const apptData = insertAppointmentSchema.parse(req.body);
+    const appt = await storage.createAppointment(req.user!.id, apptData);
+    res.status(201).json(appt);
+  });
+
+  app.get("/api/appointments", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const appts = await storage.getUserAppointments(req.user!.id);
+    res.json(appts);
+  });
+
+  app.patch("/api/appointments/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    const appt = await storage.getAppointment(Number(req.params.id));
+    if (!appt || appt.userId !== req.user!.id) {
+      return res.sendStatus(404);
+    }
+
+    const updated = await storage.updateAppointment(
+      appt.id,
+      insertAppointmentSchema.partial().parse(req.body)
+    );
+    res.json(updated);
+  });
+
+  app.delete("/api/appointments/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    const appt = await storage.getAppointment(Number(req.params.id));
+    if (!appt || appt.userId !== req.user!.id) {
+      return res.sendStatus(404);
+    }
+
+    await storage.deleteAppointment(appt.id);
+    res.sendStatus(204);
   });
 
   const httpServer = createServer(app);
