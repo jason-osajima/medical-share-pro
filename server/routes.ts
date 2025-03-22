@@ -83,9 +83,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         log(`Initializing Tesseract worker for document ${doc.id}`);
 
-        // Initialize worker with detailed logging
-        const worker = await createWorker({
-          logger: m => log(`Tesseract worker [${doc.id}]: ${JSON.stringify(m)}`),
+        const worker = await createWorker();
+
+        // Use built-in logging mechanism
+        worker.logger.subscribe(m => {
+          log(`Tesseract progress [${doc.id}]: ${JSON.stringify(m)}`);
         });
 
         log(`Processing file: ${doc.fileUrl}`);
