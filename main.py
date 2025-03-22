@@ -172,13 +172,13 @@ async def health_check():
 # Document management routes
 @app.post("/api/documents", response_model=schemas.Document)
 async def create_document(
+    background_tasks: BackgroundTasks,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
     file: UploadFile = File(...),
     name: str = Form(...),
     category: str = Form(...),
-    tags: str = Form(...),
-    background_tasks: BackgroundTasks,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    tags: str = Form(...)
 ):
     logger.info(f"Starting document upload: {file.filename}")
     
