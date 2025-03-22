@@ -16,6 +16,33 @@ export default function DocumentViewer({ document }: DocumentViewerProps) {
   const { toast } = useToast();
   const [isExpanded, setIsExpanded] = useState(false);
 
+  const processOcrMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/documents/${document.id}/process-ocr`, {
+        method: "POST"
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to process document");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      toast({
+        title: "OCR processing started",
+        description: "The document is being processed. This may take a moment.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "OCR processing failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const summarizeMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch(`/api/documents/${document.id}/summarize`, {
@@ -54,6 +81,19 @@ export default function DocumentViewer({ document }: DocumentViewerProps) {
           <FileText className="h-4 w-4 mr-2" />
           {isExpanded ? "Hide Content" : "Show Content"}
         </Button>
+        {/* Add Process OCR button */}
+        {(document.ocrStatus === "pending" || document.ocrStatus === "error") && (
+          <Button
+            onClick={() => processOcrMutation.mutate()}
+            disabled={processOcrMutation.isPending}
+            size="sm"
+          >
+            {processOcrMutation.isPending && (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            )}
+            Process OCR
+          </Button>
+        )}
         {document.ocrText && !document.summary && document.summaryStatus !== "processing" && (
           <Button
             onClick={() => summarizeMutation.mutate()}
@@ -70,6 +110,22 @@ export default function DocumentViewer({ document }: DocumentViewerProps) {
 
       {isExpanded && (
         <div className="space-y-4">
+          {/* Show OCR Status */}
+          {document.ocrStatus === "processing" && (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+              <span className="ml-2 text-sm text-gray-600">
+                Processing document...
+              </span>
+            </div>
+          )}
+
+          {document.ocrError && (
+            <div className="text-sm text-red-500">
+              Error processing document: {document.ocrError}
+            </div>
+          )}
+
           {document.summary && (
             <Card>
               <CardHeader>
