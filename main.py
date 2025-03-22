@@ -42,6 +42,7 @@ app.add_middleware(
 os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
+# Adding logging wrapper to the OCR process
 async def process_image_ocr(image: Image.Image) -> str:
     """Extract text from an image using pytesseract."""
     try:
@@ -179,28 +180,50 @@ async def create_document(
             db_document.ocr_error = None
             db.commit()
 
-            file_ext = os.path.splitext(file_path)[1].lower()
+            # Verify file exists
+            if not os.path.exists(db_document.file_url):
+                error_msg = f"File not found at path: {db_document.file_url}"
+                logger.error(error_msg)
+                db_document.ocr_status = "error"
+                db_document.ocr_error = error_msg
+                db.commit()
+                return
+
+            logger.info(f"Found file at path: {db_document.file_url}")
+            file_ext = os.path.splitext(db_document.file_url)[1].lower()
+            logger.info(f"Processing file with extension: {file_ext}")
+
             # Process based on file type
             if file_ext == '.pdf':
-                logger.info("Processing PDF file")
-                text = await process_pdf_ocr(file_path)
+                logger.info("Starting PDF processing")
+                text = await process_pdf_ocr(db_document.file_url)
             else:  # Image file
-                logger.info("Processing image file")
-                image = Image.open(file_path)
-                text = await process_image_ocr(image)
+                logger.info("Starting image processing")
+                try:
+                    image = Image.open(db_document.file_url)
+                    logger.info(f"Successfully opened image: {db_document.file_url}")
+                    text = await process_image_ocr(image)
+                except Exception as e:
+                    error_msg = f"Failed to open or process image: {str(e)}"
+                    logger.error(error_msg)
+                    raise Exception(error_msg)
 
             if not text or text.strip() == "":
-                raise Exception("No text could be extracted from the document")
+                error_msg = "No text could be extracted from the document"
+                logger.error(error_msg)
+                raise Exception(error_msg)
 
             # Update document with OCR results
+            logger.info(f"OCR completed successfully, extracted {len(text)} characters")
             db_document.ocr_text = text
             db_document.ocr_status = "completed"
-            logger.info(f"OCR completed successfully, extracted {len(text)} characters")
             db.commit()
+            logger.info(f"Database updated with OCR results for document {db_document.id}")
 
         except Exception as e:
             error_msg = str(e)
             logger.error(f"OCR Error for document {db_document.id}: {error_msg}")
+            logger.error(f"Full error details: {repr(e)}")
             db_document.ocr_status = "error"
             db_document.ocr_error = error_msg
             db.commit()
@@ -274,27 +297,50 @@ async def process_document_ocr(
             document.ocr_error = None
             db.commit()
 
+            # Verify file exists
+            if not os.path.exists(document.file_url):
+                error_msg = f"File not found at path: {document.file_url}"
+                logger.error(error_msg)
+                document.ocr_status = "error"
+                document.ocr_error = error_msg
+                db.commit()
+                return
+
+            logger.info(f"Found file at path: {document.file_url}")
+            file_ext = os.path.splitext(document.file_url)[1].lower()
+            logger.info(f"Processing file with extension: {file_ext}")
+
             # Process based on file type
             if file_ext == '.pdf':
-                logger.info("Processing PDF file")
+                logger.info("Starting PDF processing")
                 text = await process_pdf_ocr(document.file_url)
             else:  # Image file
-                logger.info("Processing image file")
-                image = Image.open(document.file_url)
-                text = await process_image_ocr(image)
+                logger.info("Starting image processing")
+                try:
+                    image = Image.open(document.file_url)
+                    logger.info(f"Successfully opened image: {document.file_url}")
+                    text = await process_image_ocr(image)
+                except Exception as e:
+                    error_msg = f"Failed to open or process image: {str(e)}"
+                    logger.error(error_msg)
+                    raise Exception(error_msg)
 
             if not text or text.strip() == "":
-                raise Exception("No text could be extracted from the document")
+                error_msg = "No text could be extracted from the document"
+                logger.error(error_msg)
+                raise Exception(error_msg)
 
             # Update document with OCR results
+            logger.info(f"OCR completed successfully, extracted {len(text)} characters")
             document.ocr_text = text
             document.ocr_status = "completed"
-            logger.info(f"OCR completed successfully, extracted {len(text)} characters")
             db.commit()
+            logger.info(f"Database updated with OCR results for document {document_id}")
 
         except Exception as e:
             error_msg = str(e)
             logger.error(f"OCR Error for document {document_id}: {error_msg}")
+            logger.error(f"Full error details: {repr(e)}")
             document.ocr_status = "error"
             document.ocr_error = error_msg
             db.commit()
