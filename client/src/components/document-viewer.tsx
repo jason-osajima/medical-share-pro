@@ -19,7 +19,11 @@ export default function DocumentViewer({ document }: DocumentViewerProps) {
   const processOcrMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch(`/api/documents/${document.id}/process-ocr`, {
-        method: "POST"
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
       });
       if (!res.ok) {
         const error = await res.json();
@@ -46,7 +50,11 @@ export default function DocumentViewer({ document }: DocumentViewerProps) {
   const summarizeMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch(`/api/documents/${document.id}/summarize`, {
-        method: "POST"
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
       });
       if (!res.ok) {
         const error = await res.json();
