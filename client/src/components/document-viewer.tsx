@@ -47,37 +47,6 @@ export default function DocumentViewer({ document }: DocumentViewerProps) {
     },
   });
 
-  const summarizeMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`/api/documents/${document.id}/summarize`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Failed to summarize document");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
-      toast({
-        title: "Document summarized",
-        description: "The summary has been generated successfully.",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Summarization failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
   return (
     <div className="space-y-4 border-t pt-4 mt-4">
       <div className="flex items-center justify-between">
@@ -89,29 +58,19 @@ export default function DocumentViewer({ document }: DocumentViewerProps) {
           <FileText className="h-4 w-4 mr-2" />
           {isExpanded ? "Hide Content" : "Show Content"}
         </Button>
-        {/* Add Process OCR button */}
-        {(document.ocrStatus === "pending" || document.ocrStatus === "error") && (
+
+        {/* Show Process OCR button when appropriate */}
+        {(!document.ocrText || document.ocrStatus === "error") && (
           <Button
             onClick={() => processOcrMutation.mutate()}
-            disabled={processOcrMutation.isPending}
+            disabled={processOcrMutation.isPending || document.ocrStatus === "processing"}
             size="sm"
+            variant="outline"
           >
             {processOcrMutation.isPending && (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             )}
             Process OCR
-          </Button>
-        )}
-        {document.ocrText && !document.summary && document.summaryStatus !== "processing" && (
-          <Button
-            onClick={() => summarizeMutation.mutate()}
-            disabled={summarizeMutation.isPending}
-            size="sm"
-          >
-            {summarizeMutation.isPending && (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            )}
-            Generate Summary
           </Button>
         )}
       </div>
@@ -129,24 +88,9 @@ export default function DocumentViewer({ document }: DocumentViewerProps) {
           )}
 
           {document.ocrError && (
-            <div className="text-sm text-red-500">
+            <div className="text-sm text-red-500 p-4 bg-red-50 rounded-md">
               Error processing document: {document.ocrError}
             </div>
-          )}
-
-          {document.summary && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Summary</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[200px]">
-                  <div className="prose max-w-none text-sm">
-                    {document.summary}
-                  </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
           )}
 
           {document.ocrText && (
@@ -162,21 +106,6 @@ export default function DocumentViewer({ document }: DocumentViewerProps) {
                 </ScrollArea>
               </CardContent>
             </Card>
-          )}
-
-          {document.summaryStatus === "processing" && (
-            <div className="flex items-center justify-center py-4">
-              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-              <span className="ml-2 text-sm text-gray-600">
-                Generating summary...
-              </span>
-            </div>
-          )}
-
-          {document.summaryError && (
-            <div className="text-sm text-red-500">
-              Error generating summary: {document.summaryError}
-            </div>
           )}
         </div>
       )}
