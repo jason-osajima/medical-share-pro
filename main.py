@@ -1,5 +1,6 @@
 import pytesseract
 from PIL import Image
+from pdf2image import convert_from_path
 import openai
 import asyncio
 from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, BackgroundTasks
@@ -35,6 +36,29 @@ app.add_middleware(
 # Mount static files for document uploads
 os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+async def process_image_ocr(image: Image.Image) -> str:
+    """Extract text from an image using pytesseract."""
+    try:
+        return pytesseract.image_to_string(image)
+    except Exception as e:
+        raise Exception(f"Failed to extract text from image: {str(e)}")
+
+async def process_pdf_ocr(pdf_path: str) -> str:
+    """Convert PDF to images and extract text using pytesseract."""
+    try:
+        # Convert PDF pages to images
+        images = convert_from_path(pdf_path)
+
+        # Process each page
+        text_parts = []
+        for i, image in enumerate(images, 1):
+            page_text = await process_image_ocr(image)
+            text_parts.append(f"--- Page {i} ---\n{page_text}\n")
+
+        return "\n".join(text_parts)
+    except Exception as e:
+        raise Exception(f"Failed to process PDF: {str(e)}")
 
 # Auth routes
 @app.post("/api/register", response_model=schemas.User)
@@ -94,6 +118,13 @@ async def create_document(
 ):
     tags_list = json.loads(tags)
 
+    # Validate file type
+    if not file.content_type in ['image/jpeg', 'image/png', 'application/pdf']:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Only JPEG, PNG, and PDF files are supported."
+        )
+
     # Save file
     file_path = f"uploads/{file.filename}"
     with open(file_path, "wb") as buffer:
@@ -142,7 +173,6 @@ async def get_documents(
 
     return documents.all()
 
-
 @app.post("/api/documents/{document_id}/process-ocr")
 async def process_document_ocr(
     document_id: int,
@@ -159,8 +189,12 @@ async def process_document_ocr(
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    if not document.file_url.lower().endswith(('.png', '.jpg', '.jpeg')):
-        raise HTTPException(status_code=400, detail="OCR is only supported for image files")
+    file_ext = os.path.splitext(document.file_url)[1].lower()
+    if file_ext not in ['.pdf', '.png', '.jpg', '.jpeg']:
+        raise HTTPException(
+            status_code=400, 
+            detail="OCR is only supported for PDF and image files (PNG, JPG)"
+        )
 
     async def process_ocr():
         try:
@@ -169,9 +203,15 @@ async def process_document_ocr(
             document.ocr_error = None
             db.commit()
 
-            # Perform OCR
-            image = Image.open(document.file_url)
-            text = pytesseract.image_to_string(image)
+            # Process based on file type
+            if file_ext == '.pdf':
+                text = await process_pdf_ocr(document.file_url)
+            else:  # Image file
+                image = Image.open(document.file_url)
+                text = await process_image_ocr(image)
+
+            if not text or text.strip() == "":
+                raise Exception("No text could be extracted from the document")
 
             # Update document with OCR results
             document.ocr_text = text
@@ -182,6 +222,7 @@ async def process_document_ocr(
             document.ocr_status = "error"
             document.ocr_error = str(e)
             db.commit()
+            print(f"OCR Error for document {document_id}: {str(e)}")
 
     # Start OCR processing in background
     background_tasks.add_task(process_ocr)
@@ -245,6 +286,7 @@ async def summarize_document(
             document.summary_status = "error"
             document.summary_error = str(e)
             db.commit()
+            print(f"Summary Error for document {document_id}: {str(e)}")
 
     # Start summary generation in background
     background_tasks.add_task(generate_summary)
