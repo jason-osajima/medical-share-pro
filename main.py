@@ -1,4 +1,8 @@
-from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form
+import pytesseract
+from PIL import Image
+import openai
+import asyncio
+from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordRequestForm
@@ -137,6 +141,115 @@ async def get_documents(
             documents = documents.filter(models.Document.tags.contains(tag))
 
     return documents.all()
+
+
+@app.post("/api/documents/{document_id}/process-ocr")
+async def process_document_ocr(
+    document_id: int,
+    background_tasks: BackgroundTasks,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Get document
+    document = db.query(models.Document).filter(
+        models.Document.id == document_id,
+        models.Document.user_id == current_user.id
+    ).first()
+
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if not document.file_url.lower().endswith(('.png', '.jpg', '.jpeg')):
+        raise HTTPException(status_code=400, detail="OCR is only supported for image files")
+
+    async def process_ocr():
+        try:
+            # Update status to processing
+            document.ocr_status = "processing"
+            document.ocr_error = None
+            db.commit()
+
+            # Perform OCR
+            image = Image.open(document.file_url)
+            text = pytesseract.image_to_string(image)
+
+            # Update document with OCR results
+            document.ocr_text = text
+            document.ocr_status = "completed"
+            db.commit()
+
+        except Exception as e:
+            document.ocr_status = "error"
+            document.ocr_error = str(e)
+            db.commit()
+
+    # Start OCR processing in background
+    background_tasks.add_task(process_ocr)
+
+    return {"message": "OCR processing started"}
+
+@app.post("/api/documents/{document_id}/summarize")
+async def summarize_document(
+    document_id: int,
+    background_tasks: BackgroundTasks,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Get document
+    document = db.query(models.Document).filter(
+        models.Document.id == document_id,
+        models.Document.user_id == current_user.id
+    ).first()
+
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if not document.ocr_text:
+        raise HTTPException(status_code=400, detail="No OCR text available for summarization")
+
+    async def generate_summary():
+        try:
+            # Update status to processing
+            document.summary_status = "processing"
+            document.summary_error = None
+            db.commit()
+
+            # Configure OpenAI
+            openai.api_key = os.getenv("OPENAI_API_KEY")
+
+            # Generate summary using OpenAI
+            completion = await openai.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a medical document summarizer. Focus on extracting key medical information, dates, diagnoses, medications, and important details from medical documents."
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Please summarize the following medical document text:\n\n{document.ocr_text}"
+                    }
+                ],
+                temperature=0.3,
+                max_tokens=500
+            )
+
+            summary = completion.choices[0].message.content
+
+            # Update document with summary
+            document.summary = summary
+            document.summary_status = "completed"
+            db.commit()
+
+        except Exception as e:
+            document.summary_status = "error"
+            document.summary_error = str(e)
+            db.commit()
+
+    # Start summary generation in background
+    background_tasks.add_task(generate_summary)
+
+    return {"message": "Summary generation started"}
 
 if __name__ == "__main__":
     import uvicorn
